@@ -1,0 +1,987 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>医学口试训练系统</title>
+<style>
+* { margin: 0; padding: 0; box-sizing: border-box; }
+body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", "PingFang SC", "Microsoft YaHei", sans-serif; background: #f0f2f5; color: #333; }
+.container { max-width: 960px; margin: 0 auto; padding: 20px; }
+.home-page { text-align: center; padding: 60px 20px; }
+.home-page h1 { font-size: 28px; margin-bottom: 8px; }
+.home-page .subtitle { color: #888; margin-bottom: 50px; font-size: 15px; }
+.mode-cards { display: grid; grid-template-columns: repeat(auto-fit, minmax(240px, 1fr)); gap: 20px; max-width: 800px; margin: 0 auto; }
+.mode-card { background: #fff; border-radius: 16px; padding: 30px 20px; cursor: pointer; transition: all .2s; box-shadow: 0 2px 8px rgba(0,0,0,.08); }
+.mode-card:hover { transform: translateY(-4px); box-shadow: 0 8px 24px rgba(0,0,0,.12); }
+.mode-card .icon { font-size: 48px; margin-bottom: 12px; }
+.mode-card h3 { margin-bottom: 8px; }
+.mode-card p { font-size: 14px; color: #666; line-height: 1.6; }
+.history-btn { margin-top: 40px; padding: 10px 24px; background: #fff; border: 1px solid #ddd; border-radius: 8px; cursor: pointer; font-size: 14px; }
+.history-btn:hover { background: #f6f8fa; }
+
+.settings-bar { position: fixed; top: 0; right: 0; padding: 12px; z-index: 100; }
+.settings-btn { background: #fff; border: 1px solid #ddd; border-radius: 8px; padding: 8px 16px; cursor: pointer; font-size: 14px; }
+.settings-panel { display: none; position: fixed; top: 50px; right: 20px; background: #fff; border-radius: 12px; padding: 20px; box-shadow: 0 8px 32px rgba(0,0,0,.15); z-index: 101; width: 360px; }
+.settings-panel.active { display: block; }
+.settings-panel label { display: block; font-size: 13px; font-weight: 600; margin-top: 12px; margin-bottom: 4px; }
+.settings-panel input { width: 100%; padding: 8px 12px; border: 1px solid #ddd; border-radius: 8px; font-size: 14px; }
+.settings-panel button { margin-top: 16px; width: 100%; padding: 10px; background: #1677ff; color: #fff; border: none; border-radius: 8px; cursor: pointer; }
+.settings-panel .notice { font-size: 12px; color: #888; margin-top: 8px; background: #f6f8fa; padding: 8px; border-radius: 6px; line-height: 1.6; }
+
+.exam-page { display: none; }
+.exam-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 20px; flex-wrap: wrap; gap: 8px; }
+.exam-header h2 { font-size: 20px; }
+.back-btn { background: none; border: 1px solid #ddd; border-radius: 8px; padding: 6px 16px; cursor: pointer; }
+.timer { font-size: 24px; font-weight: 700; color: #1677ff; }
+.submit-diag-btn { padding: 8px 20px; background: #fa8c16; color: #fff; border: none; border-radius: 8px; cursor: pointer; font-size: 14px; font-weight: 600; }
+.submit-diag-btn:hover { background: #d87200; }
+
+.config-bar { background: #fff; border-radius: 12px; padding: 16px 20px; margin-bottom: 20px; box-shadow: 0 2px 8px rgba(0,0,0,.06); display: flex; gap: 16px; align-items: center; flex-wrap: wrap; }
+.config-bar label { font-size: 14px; font-weight: 600; }
+.config-bar select { padding: 6px 12px; border: 1px solid #ddd; border-radius: 8px; font-size: 14px; }
+
+.case-select { background: #fff; border-radius: 12px; padding: 20px; margin-bottom: 20px; box-shadow: 0 2px 8px rgba(0,0,0,.06); }
+.case-select .cs-row { display: flex; align-items: flex-start; gap: 16px; flex-wrap: wrap; }
+.case-select label.cs-label { font-size: 14px; font-weight: 600; min-width: 180px; line-height: 1.6; }
+.case-select select { padding: 8px 12px; border: 1px solid #ddd; border-radius: 8px; font-size: 14px; min-width: 320px; height: 160px; }
+.case-select button { margin-top: 12px; padding: 8px 20px; background: #1677ff; color: #fff; border: none; border-radius: 8px; cursor: pointer; font-size: 14px; }
+
+.case-card { background: #fff; border-radius: 12px; padding: 24px; margin-bottom: 20px; box-shadow: 0 2px 8px rgba(0,0,0,.06); }
+.case-card h3 { margin-bottom: 12px; color: #1677ff; }
+.case-info { line-height: 1.8; }
+.case-info p { margin-bottom: 6px; }
+.case-info strong { display: inline-block; min-width: 84px; color: #555; }
+
+.prep-phase { text-align: center; padding: 40px 20px; background: #fff; border-radius: 12px; box-shadow: 0 2px 8px rgba(0,0,0,.06); }
+.prep-phase .countdown { font-size: 64px; font-weight: 700; color: #1677ff; margin: 20px 0; font-variant-numeric: tabular-nums; }
+
+.qa-phase { display: none; }
+.chat-history { max-height: 400px; overflow-y: auto; margin-bottom: 16px; padding: 12px; background: #fff; border-radius: 12px; box-shadow: 0 2px 8px rgba(0,0,0,.06); }
+.chat-msg { padding: 10px 14px; margin-bottom: 8px; border-radius: 10px; max-width: 88%; font-size: 14px; line-height: 1.7; word-break: break-word; }
+.chat-msg.examiner { background: #e6f4ff; margin-right: auto; border-left: 3px solid #1677ff; }
+.chat-msg.student { background: #f6f8fa; margin-left: auto; text-align: right; border-right: 3px solid #52c41a; }
+.chat-msg.feedback { background: #f9f0ff; margin-right: auto; border-left: 3px solid #722ed1; font-size: 9px !important; line-height: 1.5; }
+.chat-msg.patient { background: #f0f9eb; margin-right: auto; border-left: 3px solid #52c41a; }
+.question-box { background: #fff; border-radius: 12px; padding: 20px 24px; margin-bottom: 16px; box-shadow: 0 2px 8px rgba(0,0,0,.06); }
+.question-box .question-label { font-size: 13px; color: #1677ff; font-weight: 600; margin-bottom: 8px; }
+.question-box .question-text { font-size: 16px; line-height: 1.6; }
+
+.record-area { text-align: center; padding: 20px; background: #fff; border-radius: 12px; box-shadow: 0 2px 8px rgba(0,0,0,.06); }
+.record-btn { width: 80px; height: 80px; border-radius: 50%; border: none; background: #1677ff; color: #fff; font-size: 14px; cursor: pointer; transition: all .2s; user-select: none; -webkit-user-select: none; }
+.record-btn.recording { background: #ff4d4f; animation: pulse 1.5s infinite; }
+.record-btn:disabled { background: #ccc; cursor: not-allowed; animation: none; }
+@keyframes pulse { 0%,100% { transform: scale(1); } 50% { transform: scale(1.08); } }
+.transcript { margin-top: 12px; padding: 12px; background: #f6f8fa; border-radius: 8px; font-size: 14px; min-height: 40px; text-align: left; white-space: pre-wrap; }
+.text-fallback { margin-top: 12px; }
+.text-fallback textarea { width: 100%; min-height: 80px; padding: 10px; border: 1px solid #ddd; border-radius: 8px; font-size: 14px; resize: vertical; font-family: inherit; }
+.text-fallback button { margin-top: 8px; padding: 8px 20px; background: #1677ff; color: #fff; border: none; border-radius: 8px; cursor: pointer; font-size: 14px; }
+
+.status-bar { text-align: center; padding: 8px; font-size: 13px; color: #888; }
+.status-bar.error { color: #ff4d4f; }
+.status-bar.ok { color: #52c41a; }
+
+.score-panel { display: none; background: #fff; border-radius: 12px; padding: 24px; margin-top: 20px; box-shadow: 0 2px 8px rgba(0,0,0,.06); }
+.score-panel h3 { margin-bottom: 16px; }
+.score-panel .score-actions { margin-top: 16px; display: flex; gap: 12px; flex-wrap: wrap; align-items: center; }
+.score-panel .score-actions button { padding: 8px 20px; border: none; border-radius: 8px; cursor: pointer; font-size: 14px; }
+.edit-btn { background: #faad14; color: #fff; }
+.export-btn { background: #52c41a; color: #fff; }
+.export-html-btn { background: #722ed1; color: #fff; }
+.edit-area { margin-top: 12px; display: none; }
+.edit-area textarea { width: 100%; min-height: 200px; padding: 12px; border: 1px solid #ddd; border-radius: 8px; font-size: 14px; font-family: inherit; }
+.score-item { display: flex; justify-content: space-between; padding: 10px 0; border-bottom: 1px solid #f0f0f0; }
+.score-item .points { color: #1677ff; font-weight: 700; }
+.score-detail { margin-top: 16px; padding: 16px; background: #f6f8fa; border-radius: 8px; font-size: 14px; line-height: 1.8; }
+.score-detail h4 { color: #1677ff; margin-bottom: 8px; }
+.score-detail .q-section { margin-bottom: 16px; padding-bottom: 12px; border-bottom: 1px dashed #ddd; }
+.score-detail .q-section:last-child { border-bottom: none; }
+.score-detail .std-ans { background: #e6f4ff; padding: 8px 12px; border-radius: 6px; margin: 6px 0; white-space: pre-wrap; }
+.score-detail .missed { background: #fff1f0; padding: 8px 12px; border-radius: 6px; margin: 6px 0; white-space: pre-wrap; }
+.score-detail .feedback-text { background: #f9f0ff; padding: 8px 12px; border-radius: 6px; margin: 6px 0; white-space: pre-wrap; }
+
+/* 历史简介编辑区 */
+.history-summary-edit { margin-top: 16px; padding: 16px; background: #fff7e6; border-radius: 8px; border: 1px solid #ffd591; }
+.history-summary-edit label { display: block; font-size: 13px; font-weight: 600; margin-bottom: 6px; color: #d87200; }
+.history-summary-edit textarea { width: 100%; min-height: 60px; padding: 8px 12px; border: 1px solid #ddd; border-radius: 8px; font-size: 13px; font-family: inherit; resize: vertical; }
+.history-summary-edit button { margin-top: 8px; padding: 6px 16px; background: #fa8c16; color: #fff; border: none; border-radius: 6px; cursor: pointer; font-size: 13px; }
+
+.loading-mask { display: none; position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,.3); z-index: 200; align-items: center; justify-content: center; }
+.loading-mask.active { display: flex; }
+.loading-box { background: #fff; border-radius: 12px; padding: 30px 40px; text-align: center; }
+.loading-box .spinner { width: 40px; height: 40px; border: 4px solid #e8e8e8; border-top-color: #1677ff; border-radius: 50%; animation: spin .8s linear infinite; margin: 0 auto 16px; }
+@keyframes spin { to { transform: rotate(360deg); } }
+
+.history-panel { display: none; position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,.5); z-index: 300; align-items: center; justify-content: center; }
+.history-panel.active { display: flex; }
+.history-box { background: #fff; border-radius: 16px; padding: 24px; width: 90%; max-width: 800px; max-height: 80vh; overflow-y: auto; }
+.history-box h3 { margin-bottom: 16px; }
+.history-item { background: #f6f8fa; border-radius: 8px; padding: 16px 40px 16px 16px; margin-bottom: 12px; border-left: 4px solid #1677ff; cursor: pointer; transition: background .2s; position: relative; }
+.history-item:hover { background: #e6f4ff; }
+.history-item .history-meta { font-size: 12px; color: #888; margin-bottom: 4px; }
+.history-item .history-summary { font-size: 13px; color: #555; line-height:   1.5; }
+/* 右上：删除小叉 */
+.history-item .del-btn { position: absolute; top: 6px; right: 10px; width: 22px; height: 22px; border: none; background: transparent; color: #ccc; font-size: 18px; line-height: 1; cursor: pointer; border-radius: 50%; display: flex; align-items: center; justify-content: center; transition: all .2s; padding: 0; }
+.history-item .del-btn:hover { background: #ff4d4f; color: #fff; }
+/* 右下：小箭头 → 进入完整结果 */
+.history-item .arrow-btn { position: absolute; bottom: 6px; right: 12px; border: none; background: transparent; color: #ccc; font-size: 16px; cursor: pointer; transition: color .2s; padding: 2px 6px; }
+.history-item .arrow-btn:hover { color: #1677ff; }
+.history-item .history-detail { display: none; margin-top: 12px; padding-top: 12px; border-top: 1px dashed #ddd; }
+.history-item .history-detail.active { display: block; }
+.history-item .history-detail .detail-summary { font-size: 13px; line-height: 1.7; background: #fff; padding: 12px; border-radius: 6px; margin-bottom: 8px; }
+.close-history { margin-top: 16px; padding: 8px 24px; background: #888; color: #fff; border: none; border-radius: 8px; cursor: pointer; }
+
+.diag-input-mask { display: none; position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,.5); z-index: 300; align-items: center; justify-content: center; }
+.diag-input-mask.active { display: flex; }
+.diag-input-box { background: #fff; border-radius: 16px; padding: 24px; width: 90%; max-width: 600px; }
+.diag-input-box h3 { margin-bottom: 12px; }
+.diag-input-box textarea { width: 100%; min-height: 120px; padding: 12px; border: 1px solid #ddd; border-radius: 8px; font-size: 14px; resize: vertical; font-family: inherit; }
+.diag-input-box .diag-btns { margin-top: 12px; display: flex; gap: 12px; justify-content: flex-end; }
+.diag-input-box .diag-btns button { padding: 8px 20px; border: none; border-radius: 8px; cursor: pointer; font-size: 14px; }
+.diag-submit { background: #1677ff; color: #fff; }
+.diag-cancel { background: #ddd; color: #333; }
+</style>
+</head>
+<body>
+<div class="loading-mask" id="loadingMask"><div class="loading-box"><div class="spinner"></div><div id="loadingText">请稍候...</div></div></div>
+
+<div class="history-panel" id="historyPanel">
+  <div class="history-box">
+    <h3>📋 历史记录</h3>
+    <div id="historyList"></div>
+    <button class="close-history" onclick="closeHistory()">关闭</button>
+  </div>
+</div>
+
+<div class="diag-input-mask" id="diagInputMask">
+  <div class="diag-input-box">
+    <h3>📝 提交你的诊断</h3>
+    <p style="font-size:13px;color:#666;margin-bottom:12px;">请根据问诊信息，写出你认为的完整诊断</p>
+    <textarea id="diagInputText" placeholder="例如：COPD急性加重期..."></textarea>
+    <div class="diag-btns">
+      <button class="diag-cancel" onclick="closeDiagInput()">取消</button>
+      <button class="diag-submit" onclick="submitDiagnosis()">提交诊断</button>
+    </div>
+  </div>
+</div>
+
+<div class="container">
+  <div class="settings-bar"><button class="settings-btn" onclick="toggleSettings()">⚙ 设置</button></div>
+  <div class="settings-panel" id="settingsPanel">
+    <label>API 地址</label>
+    <input type="text" id="apiUrl" value="/api/generate" />
+    <label>模型名称</label>
+    <input type="text" id="modelName" value="deepseek/deepseek-flash" />
+    <div class="notice">严格程度请在口试模式的工具栏中选择。</div>
+    <button onclick="saveSettings()">保存</button>
+  </div>
+
+  <div class="home-page" id="homePage">
+    <h1>🩺 医学口试训练系统</h1>
+    <p class="subtitle">病种驱动 · 本地关键词匹配（秒回）· AI深度追问 · 自动保存</p>
+    <div class="mode-cards">
+      <div class="mode-card" onclick="startMode('interview')"><div class="icon">🩹</div><h3>问诊打分</h3><p>选病种→AI扮演患者→你一步步问诊→提交诊断→AI评分</p></div>
+      <div class="mode-card" onclick="startMode('oral_practice')"><div class="icon">📝</div><h3>口试练习</h3><p>选科室/难度→AI生成病例→5分钟准备→三连问→追问引导</p></div>
+      <div class="mode-card" onclick="startMode('oral_exam')"><div class="icon">🎓</div><h3>口试模考</h3><p>选科室/难度→严格评分→追问犀利→详细解答</p></div>
+    </div>
+    <button class="history-btn" onclick="showHistory()">📋 查看历史记录</button>
+  </div>
+
+  <div class="exam-page" id="examPage">
+    <div class="exam-header">
+      <button class="back-btn" onclick="backHome()">← 返回</button>
+      <h2 id="examTitle"></h2>
+      <div style="display:flex;gap:8px;align-items:center;">
+        <div class="timer" id="timer"></div>
+        <button class="submit-diag-btn" id="submitDiagBtn" onclick="openDiagInput()" style="display:none;">📋 提交诊断</button>
+      </div>
+    </div>
+    <div class="config-bar" id="configBar"></div>
+    <div class="err-box" id="errBox"><h4 id="errTitle">⚠ 请求出错</h4><div class="err-msg" id="errMsg"></div></div>
+    <div class="case-select" id="caseSelect"></div>
+    <div id="caseDisplay"></div>
+    <div class="prep-phase" id="prepPhase"></div>
+    <div class="qa-phase" id="qaPhase">
+      <div class="chat-history" id="chatHistory"></div>
+      <div class="question-box" id="questionBox" style="display:none;">
+        <div class="question-label">当前问题</div>
+        <div class="question-text" id="questionText"></div>
+      </div>
+      <div class="record-area">
+        <button class="record-btn" id="recordBtn" onmousedown="startRecord()" onmouseup="stopRecord()" ontouchstart="startRecord()" ontouchend="stopRecord()">按住<br>说话</button>
+        <div class="transcript" id="transcript"></div>
+        <div class="text-fallback" id="textFallback"></div>
+      </div>
+      <div class="status-bar" id="statusBar">就绪</div>
+    </div>
+    <div class="score-panel" id="scorePanel">
+      <h3 id="scorePanelTitle">📊 结果</h3>
+      <div id="scoreItems"></div>
+      <div class="score-detail" id="scoreDetail"></div>
+      <div class="score-actions">
+        <button class="edit-btn" onclick="toggleEdit()">✏️ 编辑结果</button>
+        <button class="export-btn" onclick="exportResult()">📤 导出文本</button>
+        <button class="export-html-btn" onclick="exportHTML()">📄 导出HTML</button>
+        <button class="next-btn" onclick="nextCase()" style="background:#1677ff;color:#fff;border:none;border-radius:8px;padding:10px 24px;cursor:pointer;">下一个</button>
+        <button class="next-btn" onclick="backHome()" style="background:#888;color:#fff;border:none;border-radius:8px;padding:10px 24px;cursor:pointer;">返回主页</button>
+      </div>
+      <div class="edit-area" id="editArea"><textarea id="editText"></textarea><button onclick="saveEdit()" style="margin-top:8px;padding:8px 20px;background:#1677ff;color:#fff;border:none;border-radius:8px;cursor:pointer;">保存编辑</button></div>
+      <div class="history-summary-edit" id="historySummaryEdit" style="display:none;">
+        <label>📝 编辑历史简介（将显示在历史记录列表中）</label>
+        <textarea id="historySummaryText"></textarea>
+        <button onclick="saveHistorySummary()">保存简介</button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<script>
+// ============ 病种数据库 ============
+const EXAM_DISEASES = {
+  "内科": ["COPD","慢性肺源性心脏病","支气管哮喘","呼吸衰竭","肺炎","肺脓肿","肺结核","原发性支气管肺癌","心力衰竭","高血压","心律失常","动脉粥样硬化","心肌炎","心包炎","胃炎","消化性溃疡","肠结核","炎症性肠病","肝硬化","肝性脑病","胰腺炎","上消化道出血","急性肾小球肾炎","慢性肾小球肾炎","肾病综合征","尿路感染","急性肾损伤","慢性肾衰竭","贫血","再生障碍性贫血","白血病","特发性血小板减少性紫癜","甲亢","糖尿病","类风湿关节炎","系统性红斑狼疮"],
+  "外科": ["颅内压增高","甲状腺癌","乳腺癌","腹外疝","急性化脓性腹膜炎","胃十二指肠溃疡","肠梗阻","急性阑尾炎","结直肠癌","肝脓肿","门静脉高压症","胆石症","急性胆囊炎","上消化道出血","肾损伤","前列腺增生","泌尿系结石","肾癌","股骨颈骨折","肱骨干骨折","骨盆骨折","化脓性骨髓炎"],
+  "妇科": ["妊娠期高血压","异位妊娠","前置胎盘","胎盘早剥","子宫肌瘤","子宫内膜异位症","妊娠合并糖尿病","产后出血"]
+};
+
+const DIAGNOSIS_SET = {
+  "COPD": { main: "慢性阻塞性肺疾病", keywords: ["copd","慢性阻塞性","慢阻肺","吸烟","咳痰","气喘","呼吸困难","桶状胸","过清音","fev1","气流受限"], comorbidities_kw: ["高血压","糖尿病"], complications_kw: ["肺心病","呼衰","肺性脑病","右心衰"], subtype_kw: ["gold","急性加重"] },
+  "慢性肺源性心脏病": { main: "慢性肺源性心脏病", keywords: ["肺心病","p2亢进","颈静脉怒张","肝颈回流","下肢水肿","右心室肥大","pulmonary heart"], comorbidities_kw: ["copd","慢阻肺"], complications_kw: ["右心衰","呼衰","电解质紊乱"], subtype_kw: ["失代偿","心功能"] },
+  "支气管哮喘": { main: "支气管哮喘", keywords: ["哮喘","喘息","可变气流受限","峰流速","支气管激发","支气管舒张","嗜酸性","ige"], comorbidities_kw: ["过敏性鼻炎","湿疹"], complications_kw: ["气胸","呼衰","copd重叠"], subtype_kw: ["重度","急性发作"] },
+  "呼吸衰竭": { main: "呼吸衰竭", keywords: ["呼衰","氧分压","pao2","paco2","i型","ii型","氧合指数","机械通气"], comorbidities_kw: ["copd","哮喘"], complications_kw: ["肺性脑病","酸中毒","休克"], subtype_kw: ["急性","慢性"] },
+  "肺炎": { main: "肺炎", keywords: ["肺炎","发热","咳嗽","咳痰","湿啰音","浸润影","斑片","白细胞"], comorbidities_kw: ["糖尿病"], complications_kw: ["脓胸","败血症","休克"], subtype_kw: ["社区","医院"] },
+  "冠心病": { main: "冠心病", keywords: ["胸痛","胸闷","st段","t波","心肌酶","肌钙蛋白","冠脉","造影","支架","心绞痛","心肌梗死","ami","stemi"], comorbidities_kw: ["高血压","糖尿病","高脂血症"], complications_kw: ["心源性休克","心律失常","心衰"], subtype_kw: ["killip","心功能"] },
+  "心力衰竭": { main: "心力衰竭", keywords: ["心衰","呼吸困难","端坐呼吸","夜间阵发性","奔马律","bnp","射血分数","ef"], comorbidities_kw: ["高血压","冠心病"], complications_kw: ["急性左心衰","心源性休克"], subtype_kw: ["nyha","心功能"] },
+  "高血压": { main: "高血压", keywords: ["高血压","血压","收缩压","舒张压","靶器官"], comorbidities_kw: ["糖尿病","高脂血症"], complications_kw: ["脑出血","心衰","肾损害"], subtype_kw: ["很高危","分级"] },
+  "糖尿病": { main: "糖尿病", keywords: ["糖尿病","血糖","hba1c","糖化","胰岛素","三多一少","酮症"], comorbidities_kw: ["高血压","高脂血症"], complications_kw: ["酮症酸中毒","肾病","视网膜","神经病变"], subtype_kw: ["1型","2型"] },
+  "肝硬化": { main: "肝硬化", keywords: ["肝硬化","腹水","肝掌","蜘蛛痣","白蛋白","门脉高压","脾大","食管静脉曲张"], comorbidities_kw: ["乙肝","丙肝"], complications_kw: ["腹水","肝性脑病","出血"], subtype_kw: ["child","失代偿"] },
+  "消化性溃疡": { main: "消化性溃疡", keywords: ["溃疡","上腹痛","空腹痛","黑便","呕血","胃镜","hp"], comorbidities_kw: ["高血压"], complications_kw: ["出血","穿孔","幽门梗阻"], subtype_kw: ["十二指肠","胃溃疡"] },
+  "急性胰腺炎": { main: "急性胰腺炎", keywords: ["胰腺炎","腹痛","淀粉酶","脂肪酶","饮酒","胆石"], comorbidities_kw: ["胆石症","高脂血症"], complications_kw: ["假性囊肿","ards","肾衰"], subtype_kw: ["轻症","重症"] },
+  "异位妊娠": { main: "异位妊娠", keywords: ["宫外孕","异位妊娠","停经","腹痛","阴道流血","hcg","附件包块"], comorbidities_kw: ["盆腔炎"], complications_kw: ["失血性休克","dic"], subtype_kw: ["破裂型"] },
+  "股骨颈骨折": { main: "股骨颈骨折", keywords: ["骨折","髋部疼痛","下肢缩短","外旋","garden"], comorbidities_kw: ["骨质疏松"], complications_kw: ["股骨头坏死","深静脉血栓"], subtype_kw: ["头下型","基底型"] }
+};
+
+for (const list of Object.values(EXAM_DISEASES)) {
+  for (const d of list) {
+    if (!DIAGNOSIS_SET[d]) {
+      DIAGNOSIS_SET[d] = { main: d, keywords: [d.toLowerCase()], comorbidities_kw: [], complications_kw: [], subtype_kw: [] };
+    } else {
+      if (!DIAGNOSIS_SET[d].keywords) DIAGNOSIS_SET[d].keywords = [d.toLowerCase()];
+      if (!DIAGNOSIS_SET[d].comorbidities_kw) DIAGNOSIS_SET[d].comorbidities_kw = [];
+      if (!DIAGNOSIS_SET[d].complications_kw) DIAGNOSIS_SET[d].complications_kw = [];
+      if (!DIAGNOSIS_SET[d].subtype_kw) DIAGNOSIS_SET[d].subtype_kw = [];
+    }
+  }
+}
+
+// ============ 全局状态 ============
+let settings = { apiUrl: 'http://localhost:3000/api/generate', modelName: 'deepseek/deepseek-flash', strictness: 'medium', wantComorbidities: true, wantComplications: true };
+let currentMode = '', currentDisease = '', currentCase = null;
+let prepTimer = null, prepSeconds = 300;
+let isRecording = false, currentQuestionIndex = 0;
+let currentDifficulty = 'medium', currentDept = 'all';
+let studentAnswers = [];
+let isWaitingForAI = false;
+let interviewHistory = [];
+let followUpCount = 0;
+let followUpContext = '';
+let followUpQuestion = '';
+let currentHistoryIndex = -1; // 当前结果对应的历史索引
+
+const QUESTION_SEQUENCE = [
+  { label: "第一问：诊断及依据", prompt: "请说出该患者的完整诊断（主要诊断、合并症、并发症、分型分期），并列出诊断依据。" },
+  { label: "第二问：鉴别诊断", prompt: "请列出需要鉴别的疾病及鉴别要点。" },
+  { label: "第三问：治疗", prompt: "请给出该患者的治疗方案。" }
+];
+
+// ============ 本地关键词匹配 ============
+function localKeywordCheck(answerText) {
+  const answer = answerText.toLowerCase();
+  const ds = DIAGNOSIS_SET[currentDisease] || { keywords: [currentDisease.toLowerCase()], comorbidities_kw: [], complications_kw: [], subtype_kw: [] };
+
+  // 根据设置决定是否考核合并症/并发症
+  const wantComorb = settings.wantComorbidities !== false;
+  const wantComp = settings.wantComplications !== false;
+  const comorbKw = wantComorb ? ds.comorbidities_kw : [];
+  const compKw = wantComp ? ds.complications_kw : [];
+
+  let hitMain = 0, totalMain = ds.keywords.length;
+  let hitComorb = 0, totalComorb = comorbKw.length;
+  let hitComp = 0, totalComp = compKw.length;
+  let hitSub = 0, totalSub = ds.subtype_kw.length;
+
+  ds.keywords.forEach(k => { if (answer.includes(k.toLowerCase())) hitMain++; });
+  comorbKw.forEach(k => { if (answer.includes(k.toLowerCase())) hitComorb++; });
+  compKw.forEach(k => { if (answer.includes(k.toLowerCase())) hitComp++; });
+  ds.subtype_kw.forEach(k => { if (answer.includes(k.toLowerCase())) hitSub++; });
+
+  const strictness = settings.strictness || 'medium';
+  let passThreshold = strictness === 'lenient' ? 0.15 : strictness === 'medium' ? 0.3 : 0.5;
+
+  const mainRatio = totalMain > 0 ? hitMain / totalMain : 0;
+  // 关闭某项时按权重重分配：把该项权重并给主诊断，避免关掉后更难通过
+  let comorbRatio = totalComorb > 0 ? hitComorb / totalComorb : 1;
+  let compRatio = totalComp > 0 ? hitComp / totalComp : 1;
+  const subRatio = totalSub > 0 ? hitSub / totalSub : 1;
+
+  let weightedScore;
+  if (!wantComorb && !wantComp) {
+    weightedScore = mainRatio * 0.84 + subRatio * 0.16;
+  } else if (!wantComorb) {
+    weightedScore = mainRatio * 0.67 + compRatio * 0.17 + subRatio * 0.16;
+  } else if (!wantComp) {
+    weightedScore = mainRatio * 0.67 + comorbRatio * 0.17 + subRatio * 0.16;
+  } else {
+    weightedScore = mainRatio * 0.5 + comorbRatio * 0.17 + compRatio * 0.17 + subRatio * 0.16;
+  }
+  const passed = weightedScore >= passThreshold;
+
+  let missedKws = [];
+  if (mainRatio < 0.5) ds.keywords.forEach(k => { if (!answer.includes(k.toLowerCase())) missedKws.push(k); });
+  if (wantComorb && comorbRatio < 0.5) comorbKw.forEach(k => { if (!answer.includes(k.toLowerCase())) missedKws.push(k); });
+  if (wantComp && compRatio < 0.5) compKw.forEach(k => { if (!answer.includes(k.toLowerCase())) missedKws.push(k); });
+
+  const isDeepQuestion = currentQuestionIndex >= 1;
+  let maxFollowUps = 0;
+  if (strictness === 'lenient') maxFollowUps = 0;
+  else if (strictness === 'medium') maxFollowUps = isDeepQuestion ? 2 : 1;
+  else maxFollowUps = isDeepQuestion ? 3 : 2;
+
+  return { passed, score: Math.round(weightedScore * 100), missedKws: missedKws.slice(0, 5), maxFollowUps, weightedScore };
+}
+
+// ============ 语音识别 ============
+let recognition = null, finalTranscript = '', interimTranscript = '', speechSupported = false;
+
+function initSpeechRecognition() {
+  const SR = window.SpeechRecognition || window.webkitSpeechRecognition;
+  if (!SR) { showTextFallback(); return false; }
+  recognition = new SR(); recognition.continuous = true; recognition.interimResults = true; recognition.lang = 'zh-CN';
+  speechSupported = true;
+  recognition.onstart = () => { finalTranscript=''; interimTranscript=''; document.getElementById('transcript').textContent='🎤 聆听中...'; setStatus('语音识别中...',false,false); };
+  recognition.onresult = e => { interimTranscript=''; finalTranscript=''; for(let i=e.resultIndex;i<e.results.length;i++){const t=e.results[i][0].transcript;if(e.results[i].isFinal)finalTranscript+=t;else interimTranscript+=t;} document.getElementById('transcript').textContent=finalTranscript+interimTranscript||'🎤 聆听中...'; };
+  recognition.onerror = e => { document.getElementById('transcript').textContent='❌ 语音出错'; isRecording=false; setStatus('语音出错',true,false); };
+  recognition.onend = () => { isRecording=false; };
+  return true;
+}
+
+function showTextFallback() { const fb=document.getElementById('textFallback'); if(fb&&!fb.innerHTML) fb.innerHTML='<textarea id="textAnswerInput" placeholder="打字回答..."></textarea><button onclick="submitTextAnswer()">提交</button>'; }
+
+function startRecord() {
+  if(!speechSupported){if(!recognition)initSpeechRecognition();if(!speechSupported)return;} if(isRecording||isWaitingForAI)return;
+  isRecording=true; document.getElementById('recordBtn').classList.add('recording');
+  try{recognition.start();}catch(e){setTimeout(()=>{try{recognition.start();}catch(e2){}},200);}
+}
+function stopRecord() {
+  if(!isRecording)return; isRecording=false; document.getElementById('recordBtn').classList.remove('recording');
+  if(recognition)recognition.stop();
+  setTimeout(()=>{ const text=(finalTranscript+interimTranscript).trim(); if(text){ document.getElementById('transcript').textContent=text; addChatMsg('student',text); if(currentMode==='interview')processInterviewInput(text); else processStudentAnswer(text); } else {document.getElementById('transcript').textContent='⚠ 未识别到语音';showTextFallback();} },600);
+}
+function submitTextAnswer(){ const input=document.getElementById('textAnswerInput'); if(!input)return; const text=input.value.trim(); if(!text)return; document.getElementById('transcript').textContent=text; addChatMsg('student',text); input.value=''; if(currentMode==='interview')processInterviewInput(text); else processStudentAnswer(text); }
+
+// ============ 问诊模式 ============
+async function processInterviewInput(text) {
+  if(isWaitingForAI)return; isWaitingForAI=true; const btn=document.getElementById('recordBtn'); if(btn)btn.disabled=true;
+  setStatus('🤔 患者思考中...',false,false); interviewHistory.push({role:'student',content:text});
+  const ds=DIAGNOSIS_SET[currentDisease]||{main:currentDisease};
+  const prompt=`你是一位患者。病种：${currentDisease}。标准诊断：${ds.main}。病例：${JSON.stringify(currentCase)}。对话历史：${JSON.stringify(interviewHistory.slice(-8))}。医生刚才说："${text}"。扮演患者回答，只说患者知道的信息，口语化，50字内，直接输出。`;
+  try{
+    const r=await fetch(settings.apiUrl,{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({model:settings.modelName,messages:[{role:"user",content:prompt}]})});
+    const data=await r.json(); if(!r.ok)throw new Error(data.error?.message||'HTTP'+r.status);
+    const reply=data.choices[0].message.content.trim();
+    addChatMsg('patient','🧑‍⚕️ '+reply); interviewHistory.push({role:'patient',content:reply}); setStatus('就绪，继续问诊',false,true);
+  }catch(e){addChatMsg('patient','（患者未回应）');setStatus('失败',true,false);}
+  finally{isWaitingForAI=false;if(btn)btn.disabled=false;}
+}
+
+function openDiagInput(){document.getElementById('diagInputMask').classList.add('active');document.getElementById('diagInputText').focus();}
+function closeDiagInput(){document.getElementById('diagInputMask').classList.remove('active');}
+
+async function submitDiagnosis() {
+  const diagText=document.getElementById('diagInputText').value.trim(); if(!diagText){alert('请先输入诊断');return;}
+  closeDiagInput(); document.getElementById('qaPhase').style.display='none'; document.getElementById('scorePanel').style.display='block';
+  showLoading('AI 评分中...');
+  
+  let conversationText = '';
+  interviewHistory.forEach(h => {
+    if(h.role==='student') conversationText += '医生：' + h.content + '\n';
+    else conversationText += '患者：' + h.content + '\n';
+  });
+  
+  const ds=DIAGNOSIS_SET[currentDisease]||{main:currentDisease};
+  const stdDiag=`${ds.main}；合并症：${(ds.comorbidities_kw||[]).join('、')}；并发症：${(ds.complications_kw||[]).join('、')}；分型：${(ds.subtype_kw||[]).join('、')}`;
+  
+  const prompt=`你是医学考官。请基于以下完整的问诊对话，对学生的问诊技能进行评分。
+
+病种：${currentDisease}
+标准诊断：${stdDiag}
+学生最终诊断：${diagText}
+
+完整问诊对话：
+${conversationText}
+
+请从以下维度评分（各维度0-100分，总分加权）：
+1. 现病史要素（30%）：起病情况与时间、诱因、主要症状特点（部位/性质/程度/持续时间）、病情演变、伴随症状、诊疗经过
+2. 基本信息（10%）：年龄、性别、职业等是否询问
+3. 其他史（20%）：既往史、个人史（吸烟饮酒等）、家族史、月经婚育史（如适用）
+4. 鉴别诊断相关提问（15%）：是否针对鉴别要点进行了有针对性的追问
+5. 人文关怀与沟通技巧（15%）：是否有关心患者、解释病情、语气得当
+6. 问诊逻辑与系统性（10%）：问诊是否有序、有无遗漏重要方面
+
+JSON格式：
+{"total_score":0-100,"dimension_scores":{"history_taking":0-100,"basic_info":0-100,"other_history":0-100,"diff_questions":0-100,"humanity":0-100,"logic":0-100},"dimension_comments":{"history_taking":"","basic_info":"","other_history":"","diff_questions":"","humanity":"","logic":""},"overall_feedback":"综合点评","correct_items":[],"missed_items":[],"deduction_detail":"","std_diag_full":""}`;
+
+  try{
+    const r=await fetch(settings.apiUrl,{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({model:settings.modelName,messages:[{role:"user",content:prompt}]})});
+    const data=await r.json(); if(!r.ok)throw new Error(data.error?.message||'HTTP'+r.status);
+    const result=JSON.parse(data.choices[0].message.content.replace(/```json?\s*/g,'').replace(/```/g,'').trim());
+    
+    document.getElementById('scorePanelTitle').textContent='📋 问诊评分（基于问诊过程）';
+    
+    let scoresHtml=`<div class="score-item"><span>🏆 总分</span><span class="points">${result.total_score}/100</span></div>`;
+    const dNames={"history_taking":"现病史要素","basic_info":"基本信息","other_history":"其他史","diff_questions":"鉴别提问","humanity":"人文关怀","logic":"问诊逻辑"};
+    for(const[k,v]of Object.entries(result.dimension_scores||{})){
+      scoresHtml+=`<div class="score-item"><span>${dNames[k]||k}</span><span class="points">${v}/100</span></div>`;
+    }
+    document.getElementById('scoreItems').innerHTML=scoresHtml;
+    
+    let detail='';
+    for(const[k,v]of Object.entries(result.dimension_comments||{})){
+      if(v) detail+=`<div class="q-section"><h4>${dNames[k]||k}</h4><p>${v}</p></div>`;
+    }
+    detail+=`<div class="q-section"><h4>💬 综合点评</h4><p>${result.overall_feedback}</p></div>`;
+    detail+=`<div class="q-section"><h4>📖 标准诊断</h4><p>${stdDiag}</p></div>`;
+    detail+=`<div class="q-section"><h4>📝 学生诊断</h4><p>${diagText}</p></div>`;
+    document.getElementById('scoreDetail').innerHTML=detail;
+    
+    // 保存历史
+    const historyData={
+      disease:currentDisease,studentDiag:diagText,score:result.total_score,
+      dimensionScores:result.dimension_scores||{},dimensionComments:result.dimension_comments||{},
+      overallFeedback:result.overall_feedback,stdDiag,
+      conversationLength:interviewHistory.length,time:new Date().toLocaleString('zh-CN'),
+      summary: `问诊评分 ${result.total_score}/100，对话${interviewHistory.length}轮`
+    };
+    currentHistoryIndex=saveHistoryAndReturnIndex('interview',historyData);
+    
+    // 显示历史简介编辑区
+    showHistorySummaryEdit(historyData.summary);
+    
+    hideLoading();setStatus('完成',false,true);
+  }catch(e){hideLoading();document.getElementById('scoreDetail').innerHTML='<p style="color:#ff4d4f;">评分失败：'+e.message+'</p>';}
+}
+
+// ============ 口试模式 ============
+async function processStudentAnswer(answerText) {
+  if(isWaitingForAI)return;
+  const q=QUESTION_SEQUENCE[currentQuestionIndex];
+  const isFollowUpReply=followUpCount>0&&followUpContext;
+  const localResult=localKeywordCheck(answerText);
+
+  // 宽松模式：直接过
+  if(settings.strictness==='lenient'){
+    studentAnswers[currentQuestionIndex]=answerText;
+    if(!localResult.passed) addChatMsg('feedback','（回答已记录，继续下一问）');
+    currentQuestionIndex++; followUpCount=0; followUpContext=''; followUpQuestion='';
+    if(currentQuestionIndex<QUESTION_SEQUENCE.length){askCurrentQuestion();setStatus('就绪',false,true);}else finishExam();
+    return;
+  }
+
+  // 中等/严格模式：本地关键词匹配通过 且 非追问中 → 直接过
+  if(localResult.passed && followUpCount===0){
+    addChatMsg('feedback','✅ 要点覆盖到位，继续。');
+    studentAnswers[currentQuestionIndex]=answerText;
+    currentQuestionIndex++; followUpCount=0; followUpContext=''; followUpQuestion='';
+    if(currentQuestionIndex<QUESTION_SEQUENCE.length){askCurrentQuestion();setStatus('就绪',false,true);}else finishExam();
+    return;
+  }
+
+  // 需要AI判断（部分覆盖 或 追问中）
+  isWaitingForAI=true; const btn=document.getElementById('recordBtn'); if(btn)btn.disabled=true;
+  setStatus('🤔 AI 分析中...',false,false);
+
+  let contextBlock='';
+  if(isFollowUpReply) contextBlock=`这是追问后的补充。前文：学生上一轮="${followUpContext}"，追问="${followUpQuestion}"，补充="${answerText}"。综合评估。`;
+
+  // 硬约束 prompt：把「可省略」改成「必须」，仅满分才可空
+  const prompt=`你是严格的医学口试考官。病种：${currentDisease}。问题：${q.label}。学生回答："${answerText}"。${contextBlock}
+要求：
+1. 不纠结回答顺序，点到要点即可
+2. 搭边就放行，不要过度追问
+3. 追问上限${localResult.maxFollowUps}轮（当前${followUpCount}/${localResult.maxFollowUps}）
+4. 提示极简一句话，苏格拉底式引导，不剧透
+5. 对试探性回答给予肯定+引导补充
+6. 仅当回答完全满分(passed且score>=90)时 follow_up 才可为空字符串；其余情况必须给一条具体追问，禁止省略本字段
+7. 必须只输出如下严格 JSON，不要输出任何额外文字、不要使用 Markdown 代码块
+
+{"score":0-100,"is_on_topic":true或false,"feedback":"极简点评","follow_up":"追问一句话，无追问则为空字符串"}`;
+
+  // 解析AI结果，失败自动重试一次
+  async function callAndParse(){
+    const r=await fetch(settings.apiUrl,{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({model:settings.modelName,messages:[{role:"user",content:prompt}],temperature:0.3})});
+    const data=await r.json(); if(!r.ok)throw new Error(data.error?.message||('HTTP'+r.status));
+    const raw=data.choices&&data.choices[0]&&data.choices[0].message&&data.choices[0].message.content||'';
+    const cleaned=raw.replace(/```json?\s*/gi,'').replace(/```/g,'').trim();
+    let a=null;
+    try{ a=JSON.parse(cleaned); }catch(e){
+      const m=cleaned.match(/\{[\s\S]*\}/);
+      if(m) try{ a=JSON.parse(m[0]); }catch(e2){ a=null; }
+    }
+    console.log('[追问调试] raw:', raw.slice(0,400), '| parsed:', JSON.stringify(a), '| follow_up:', a&&a.follow_up);
+    if(!a||typeof a.score==='undefined') throw new Error('AI返回格式异常');
+    return a;
+  }
+
+  let analysis=null;
+  try{
+    try{
+      analysis=await callAndParse();
+    }catch(firstErr){
+      console.warn('AI首次解析失败，重试一次...', firstErr);
+      try{ analysis=await callAndParse(); }catch(e2){ throw firstErr; } // 重试仍失败则用首次错误
+    }
+
+    if(analysis.feedback) addChatMsg('feedback','📋 '+analysis.feedback);
+
+    // 不搭边：放行进入下一问
+    if(analysis.is_on_topic===false){
+      studentAnswers[currentQuestionIndex]=answerText;
+      currentQuestionIndex++; followUpCount=0; followUpContext=''; followUpQuestion='';
+      if(currentQuestionIndex<QUESTION_SEQUENCE.length){askCurrentQuestion();setStatus('就绪',false,true);}else finishExam();
+      return;
+    }
+
+    // 判定是否需要追问：未过阈值 或 得分<90 → 需要追问；未达上限才执行
+    const wantFollowUp = !localResult.passed || (analysis.score||0) < 90;
+
+    if(wantFollowUp && followUpCount<localResult.maxFollowUps){
+      let fu=String(analysis.follow_up||'').trim();
+      // 本地兜底：AI没返回追问时，按关键词缺口生成一条
+      if(!fu){
+        const ds=DIAGNOSIS_SET[currentDisease]||{};
+        const missed=(localResult.missedKws&&localResult.missedKws.length)?localResult.missedKws[0]:'';
+        const fallback=[
+          missed?`你提到了${missed}，还有哪些关键点没有覆盖？`:'这个回答还有哪些方面可以补充？',
+          '如果再进一步深入，你会从哪个角度展开？',
+          '结合这个病例，你怎么向患者解释你的判断依据？'
+        ];
+        fu=fallback[followUpCount%fallback.length];
+      }
+      followUpContext=answerText; followUpQuestion=fu; followUpCount++;
+      addChatMsg('examiner','🔍 '+fu);
+      setStatus('请补充',false,false); isWaitingForAI=false; if(btn)btn.disabled=false; return;
+    }
+
+    // 不需要追问或已达上限 → 进入下一问
+    followUpCount=0; followUpContext=''; followUpQuestion='';
+    studentAnswers[currentQuestionIndex]=answerText;
+    currentQuestionIndex++;
+    if(currentQuestionIndex<QUESTION_SEQUENCE.length){askCurrentQuestion();setStatus('就绪',false,true);}else finishExam();
+  }catch(e){
+    console.error('AI分析失败，使用本地兜底：', e);
+    addChatMsg('feedback','⚠ 网络/模型异常，已使用本地规则继续。');
+    // 异常兜底：未过阈值且有追问次数 → 本地追问；否则放行
+    if(!localResult.passed && followUpCount<localResult.maxFollowUps){
+      const ds=DIAGNOSIS_SET[currentDisease]||{};
+      const missed=(localResult.missedKws&&localResult.missedKws.length)?localResult.missedKws[0]:'';
+      const fu=missed?`关于${missed}，你还能补充什么？`:'这个回答还有哪些要点可以继续完善？';
+      followUpContext=answerText; followUpQuestion=fu; followUpCount++;
+      addChatMsg('examiner','🔍 '+fu);
+      setStatus('请补充',false,false); isWaitingForAI=false; if(btn)btn.disabled=false; return;
+    }
+    studentAnswers[currentQuestionIndex]=answerText;
+    currentQuestionIndex++; followUpCount=0; followUpContext=''; followUpQuestion='';
+    if(currentQuestionIndex<QUESTION_SEQUENCE.length)askCurrentQuestion();else finishExam();
+  }finally{isWaitingForAI=false;if(btn)btn.disabled=false;}
+}
+
+async function finishExam() {
+  document.getElementById('qaPhase').style.display='none'; document.getElementById('scorePanel').style.display='block';
+  showLoading('生成详细解答...');
+  const stdAns=currentCase.standard_answers||{};
+  let answersText='';
+  for(let i=0;i<QUESTION_SEQUENCE.length;i++){
+    answersText+=`${QUESTION_SEQUENCE[i].label}\n学生回答：${studentAnswers[i]||'（未回答）'}\n\n`;
+  }
+  const prompt=`考官。病种：${currentDisease}。病例：${JSON.stringify(currentCase)}。\n${answersText}\n生成解析JSON：
+{"scores":[{"question":"${QUESTION_SEQUENCE[0].label}","score":85,"reason":""},{"question":"${QUESTION_SEQUENCE[1].label}","score":80,"reason":""},{"question":"${QUESTION_SEQUENCE[2].label}","score":85,"reason":""}],"details":[{"question":"${QUESTION_SEQUENCE[0].label}","std_answer":"","missed":"","comment":""},{"question":"${QUESTION_SEQUENCE[1].label}","std_answer":"","missed":"","comment":""},{"question":"${QUESTION_SEQUENCE[2].label}","std_answer":"","missed":"","comment":""}],"summary":""}`;
+  try{
+    const r=await fetch(settings.apiUrl,{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({model:settings.modelName,messages:[{role:"user",content:prompt}]})});
+    const data=await r.json(); if(!r.ok)throw new Error(data.error?.message||'HTTP'+r.status);
+    const result=JSON.parse(data.choices[0].message.content.replace(/```json?\s*/g,'').replace(/```/g,'').trim());
+    let scoresHtml=''; result.scores.forEach(s=>{scoresHtml+=`<div class="score-item"><span>${s.question}</span><span class="points">${s.score}/100</span></div>`;});
+    document.getElementById('scoreItems').innerHTML=scoresHtml;
+    let detailHtml='';
+    result.details.forEach((d,i)=>{
+      detailHtml+=`<div class="q-section"><h4>${d.question}</h4>`;
+      detailHtml+=`<div class="std-ans"><strong>✅ 标准答案：</strong>\n${d.std_answer}</div>`;
+      if(d.missed&&d.missed!=='无')detailHtml+=`<div class="missed"><strong>❌ 遗漏：</strong>\n${d.missed}</div>`;
+      detailHtml+=`<div class="feedback-text"><strong>📋 点评：</strong>\n${d.comment}</div>`;
+      detailHtml+=`<div style="background:#f0f0f0;padding:8px 12px;border-radius:6px;margin:6px 0;"><strong>🗣 你的回答：</strong>\n${studentAnswers[i]||'（未回答）'}</div></div>`;
+    });
+    detailHtml+=`<div class="q-section"><h4>📝 综合点评</h4><p>${result.summary}</p></div>`;
+    document.getElementById('scoreDetail').innerHTML=detailHtml;
+    
+    // 保存历史
+    const historyData={
+      disease:currentDisease,caseTitle:'病例',studentAnswers:[...studentAnswers],scores:result.scores,summary:result.summary,time:new Date().toLocaleString('zh-CN'),
+      shortSummary: `口试评分 ${result.scores.map(s=>s.score).reduce((a,b)=>a+b,0)/3|0}/100，${currentDisease}`
+    };
+    currentHistoryIndex=saveHistoryAndReturnIndex('oral',historyData);
+    
+    // 显示历史简介编辑区
+    showHistorySummaryEdit(historyData.shortSummary);
+    
+    hideLoading();setStatus('完成，已保存',false,true);
+  }catch(e){hideLoading();document.getElementById('scoreDetail').innerHTML='<p style="color:#ff4d4f;">生成失败：'+e.message+'</p>';}
+}
+
+// ============ 编辑/导出 ============
+function toggleEdit(){
+  const area=document.getElementById('editArea');
+  if(area.style.display==='block'){area.style.display='none';}else{
+    area.style.display='block';
+    let text=`医学口试训练结果\n病种：${currentDisease}\n时间：${new Date().toLocaleString('zh-CN')}\n\n`;
+    // 病例信息
+    if(currentCase){
+      text+=`========== 病例信息 ==========\n`;
+      if(currentCase.chief_complaint) text+=`主诉：${currentCase.chief_complaint}\n`;
+      if(currentCase.history) text+=`现病史：${currentCase.history}\n`;
+      if(currentCase.physical) text+=`查体：${currentCase.physical}\n`;
+      if(currentCase.labs) text+=`辅助检查：${currentCase.labs}\n`;
+      text+='\n';
+    }
+    for(let i=0;i<QUESTION_SEQUENCE.length;i++){
+      text+=`${QUESTION_SEQUENCE[i].label}\n你的回答：${studentAnswers[i]||'（未回答）'}\n\n`;
+    }
+    text+=document.getElementById('scoreItems').innerText+'\n\n'+document.getElementById('scoreDetail').innerText;
+    document.getElementById('editText').value=text;
+  }
+}
+function saveEdit(){const text=document.getElementById('editText').value;document.getElementById('scoreDetail').innerHTML='<pre style="white-space:pre-wrap;font-size:14px;line-height:1.8;">'+text+'</pre>';document.getElementById('editArea').style.display='none';setStatus('已保存',false,true);}
+
+function exportResult(){
+  // 优先用编辑区内容，否则从当前页面拼接（含病例）
+  let text=document.getElementById('editText').value;
+  if(!text||!text.includes('========== 病例信息 ==========')){
+    text=`医学口试训练结果\n病种：${currentDisease}\n时间：${new Date().toLocaleString('zh-CN')}\n\n`;
+    if(currentCase){
+      text+=`========== 病例信息 ==========\n`;
+      if(currentCase.chief_complaint) text+=`主诉：${currentCase.chief_complaint}\n`;
+      if(currentCase.history) text+=`现病史：${currentCase.history}\n`;
+      if(currentCase.physical) text+=`查体：${currentCase.physical}\n`;
+      if(currentCase.labs) text+=`辅助检查：${currentCase.labs}\n`;
+      text+='\n';
+    }
+    for(let i=0;i<QUESTION_SEQUENCE.length;i++){
+      text+=`${QUESTION_SEQUENCE[i].label}\n你的回答：${studentAnswers[i]||'（未回答）'}\n\n`;
+    }
+    text+=document.getElementById('scoreItems').innerText+'\n\n'+document.getElementById('scoreDetail').innerText;
+  }
+  const blob=new Blob([text],{type:'text/plain;charset=utf-8'});
+  const url=URL.createObjectURL(blob);const a=document.createElement('a');a.href=url;a.download=`口试结果_${currentDisease}_${Date.now()}.txt`;a.click();URL.revokeObjectURL(url);
+}
+
+function exportHTML(){
+  const scorePanel=document.getElementById('scorePanel');
+  const title=document.getElementById('scorePanelTitle').textContent;
+  const items=document.getElementById('scoreItems').innerHTML;
+  const detail=document.getElementById('scoreDetail').innerHTML;
+  // 病例HTML
+  let caseHtml='';
+  if(currentCase){
+    caseHtml=`<div style="background:#f0f9ff;padding:16px;border-radius:8px;margin-bottom:20px;">
+      <h4 style="color:#1677ff;margin-bottom:12px;">📋 病例信息</h4>
+      ${currentCase.chief_complaint?`<p><strong>主诉：</strong>${currentCase.chief_complaint}</p>`:''}
+      ${currentCase.history?`<p><strong>现病史：</strong>${currentCase.history}</p>`:''}
+      ${currentCase.physical?`<p><strong>查体：</strong>${currentCase.physical}</p>`:''}
+      ${currentCase.labs?`<p><strong>辅助检查：</strong>${currentCase.labs}</p>`:''}
+    </div>`;
+  }
+  const html=`<!DOCTYPE html><html lang="zh-CN"><head><meta charset="UTF-8"><title>${title}</title>
+<style>
+body{font-family:-apple-system,BlinkMacSystemFont,"Segoe UI","PingFang SC","Microsoft YaHei",sans-serif;background:#f0f2f5;padding:20px;color:#333;}
+.container{max-width:960px;margin:0 auto;background:#fff;border-radius:12px;padding:24px;box-shadow:0 2px 8px rgba(0,0,0,.06);}
+h3{margin-bottom:16px;color:#1677ff;}
+.score-item{display:flex;justify-content:space-between;padding:10px 0;border-bottom:1px solid #f0f0f0;}
+.score-item .points{color:#1677ff;font-weight:700;}
+.q-section{margin-bottom:16px;padding-bottom:12px;border-bottom:1px dashed #ddd;}
+.q-section:last-child{border-bottom:none;}
+.q-section h4{color:#1677ff;margin-bottom:8px;}
+.std-ans{background:#e6f4ff;padding:8px 12px;border-radius:6px;margin:6px 0;white-space:pre-wrap;}
+.missed{background:#fff1f0;padding:8px 12px;border-radius:6px;margin:6px 0;white-space:pre-wrap;}
+.feedback-text{background:#f9f0ff;padding:8px 12px;border-radius:6px;margin:6px 0;white-space:pre-wrap;}
+</style></head><body><div class="container"><h3>${title}</h3>${caseHtml}<div>${items}</div><div style="margin-top:16px;padding:16px;background:#f6f8fa;border-radius:8px;font-size:14px;line-height:1.8;">${detail}</div></div></body></html>`;
+  const blob=new Blob([html],{type:'text/html;charset=utf-8'});
+  const url=URL.createObjectURL(blob);const a=document.createElement('a');a.href=url;a.download=`口试结果_${currentDisease}_${Date.now()}.html`;a.click();URL.revokeObjectURL(url);
+}
+
+// ============ 历史 ============
+function saveHistoryAndReturnIndex(type,data){
+  let h=JSON.parse(localStorage.getItem('sp_history')||'[]');
+  h.unshift({type,data,savedAt:new Date().toISOString()});
+  if(h.length>50)h=h.slice(0,50);
+  localStorage.setItem('sp_history',JSON.stringify(h));
+  return 0; // 刚unshift的在最前面
+}
+
+function saveHistory(type,data){saveHistoryAndReturnIndex(type,data);}
+
+function deleteHistory(idx,e){
+  e.stopPropagation();
+  let h=JSON.parse(localStorage.getItem('sp_history')||'[]');
+  h.splice(idx,1);
+  localStorage.setItem('sp_history',JSON.stringify(h));
+  showHistory();
+}
+
+function showHistorySummaryEdit(currentSummary){
+  const editDiv=document.getElementById('historySummaryEdit');
+  document.getElementById('historySummaryText').value=currentSummary||'';
+  editDiv.style.display='block';
+}
+
+function saveHistorySummary(){
+  const newSummary=document.getElementById('historySummaryText').value.trim();
+  if(!newSummary||currentHistoryIndex<0)return;
+  let h=JSON.parse(localStorage.getItem('sp_history')||'[]');
+  if(h[currentHistoryIndex]){
+    h[currentHistoryIndex].data.summary=newSummary;
+    h[currentHistoryIndex].data.shortSummary=newSummary;
+    localStorage.setItem('sp_history',JSON.stringify(h));
+  }
+  document.getElementById('historySummaryEdit').style.display='none';
+  setStatus('简介已保存',false,true);
+}
+
+function showHistory(){
+  const list=document.getElementById('historyList');const h=JSON.parse(localStorage.getItem('sp_history')||'[]');
+  if(!h.length){list.innerHTML='<p style="text-align:center;color:#888;padding:40px;">暂无记录</p>';}else{
+    let html='';
+    h.forEach((item,idx)=>{
+      if(item.type==='interview'){
+        const d=item.data||{};
+        const summary=d.summary||`问诊评分 ${d.score}/100`;
+        const diag=(d.studentDiag||'').substring(0,80)+(d.studentDiag&&d.studentDiag.length>80?'...':'');
+        html+=`<div class="history-item" onclick="toggleHistoryDetail(${idx})">
+          <button class="del-btn" onclick="deleteHistory(${idx},event)" title="删除">×</button>
+          <div class="history-meta">${d.time||''} · 问诊 · ${d.disease||''} · ${d.score!=null?d.score+'/100':''}</div>
+          <div class="history-summary">${summary}</div>
+          <div class="history-detail" id="histDetail${idx}">
+            <div class="detail-summary"><strong>诊断：</strong>${diag}<br><strong>综合点评：</strong>${d.overallFeedback||''}</div>
+            <button class="arrow-btn" onclick="gotoHistoryResult(${idx});event.stopPropagation();" title="进入完整结果">→</button>
+          </div>
+        </div>`;
+      }else{
+        const d=item.data||{};
+        const avgScore=d.scores&&d.scores.length?Math.round(d.scores.reduce((a,s)=>a+s.score,0)/d.scores.length):'?';
+        const summary=d.summary||d.shortSummary||`口试评分 ${avgScore}/100，${d.disease||''}`;
+        let answersPreview='';
+        if(d.studentAnswers) d.studentAnswers.slice(0,2).forEach((a,i)=>{answersPreview+=`第${i+1}问：${(a||'未答').substring(0,40)}${a&&a.length>40?'...':''}\n`;});
+        html+=`<div class="history-item" onclick="toggleHistoryDetail(${idx})">
+          <button class="del-btn" onclick="deleteHistory(${idx},event)" title="删除">×</button>
+          <div class="history-meta">${d.time||''} · 口试 · ${d.disease||''} · 均分${avgScore}</div>
+          <div class="history-summary">${summary}</div>
+          <div class="history-detail" id="histDetail${idx}">
+            <div class="detail-summary"><strong>病例：</strong>${d.caseTitle||'病例'}<br><pre style="font-size:12px;white-space:pre-wrap;margin-top:4px;">${answersPreview}</pre></div>
+            <button class="arrow-btn" onclick="gotoHistoryResult(${idx});event.stopPropagation();" title="进入完整结果">→</button>
+          </div>
+        </div>`;
+      }
+    });
+    list.innerHTML=html;
+  }
+  document.getElementById('historyPanel').classList.add('active');
+}
+
+function toggleHistoryDetail(idx){
+  const el=document.getElementById('histDetail'+idx);
+  if(el)el.classList.toggle('active');
+}
+
+function gotoHistoryResult(idx){
+  try{
+    const h=JSON.parse(localStorage.getItem('sp_history')||'[]');
+    if(!h[idx]){ setStatus('记录已损坏',true,false); return; }
+    const item=h[idx];
+    if(!item||!item.data){ setStatus('记录数据缺失',true,false); return; }
+    const d=item.data||{};
+    closeHistory();
+
+    // 切换到结果视图：只显示评分面板，隐藏其他阶段
+    document.getElementById('homePage').style.display='none';
+    document.getElementById('examPage').style.display='block';
+    document.getElementById('scorePanel').style.display='block';
+    document.getElementById('qaPhase').style.display='none';
+    document.getElementById('caseSelect').style.display='none';
+    document.getElementById('prepPhase').style.display='none';
+    document.getElementById('configBar').style.display='none';
+    document.getElementById('questionBox').style.display='none';
+    document.getElementById('caseDisplay').innerHTML='';
+    document.getElementById('submitDiagBtn').style.display='none';
+    document.getElementById('historySummaryEdit').style.display='none';
+    document.getElementById('examTitle').textContent=item.type==='interview'?'问诊评分（历史）':'口试结果（历史）';
+
+    if(item.type==='interview'){
+      document.getElementById('scorePanelTitle').textContent='📋 问诊评分（历史记录）';
+      const dNames={"history_taking":"现病史要素","basic_info":"基本信息","other_history":"其他史","diff_questions":"鉴别提问","humanity":"人文关怀","logic":"问诊逻辑"};
+      let scoresHtml=`<div class="score-item"><span>🏆 总分</span><span class="points">${d.score!=null?d.score+'/100':'-'}</span></div>`;
+      for(const[k,v]of Object.entries(d.dimensionScores||{})){
+        scoresHtml+=`<div class="score-item"><span>${dNames[k]||k}</span><span class="points">${v}/100</span></div>`;
+      }
+      document.getElementById('scoreItems').innerHTML=scoresHtml;
+      let detail='';
+      for(const[k,v]of Object.entries(d.dimensionComments||{})){
+        if(v) detail+=`<div class="q-section"><h4>${dNames[k]||k}</h4><p>${v}</p></div>`;
+      }
+      detail+=`<div class="q-section"><h4>💬 综合点评</h4><p>${d.overallFeedback||''}</p></div>`;
+      detail+=`<div class="q-section"><h4>📖 标准诊断</h4><p>${d.stdDiag||''}</p></div>`;
+      detail+=`<div class="q-section"><h4>📝 学生诊断</h4><p>${d.studentDiag||''}</p></div>`;
+      document.getElementById('scoreDetail').innerHTML=detail;
+    }else{
+      const d=item.data;
+      document.getElementById('scorePanelTitle').textContent='📋 口试结果（历史记录）';
+      let scoresHtml='';
+      (d.scores||[]).forEach(s=>{scoresHtml+=`<div class="score-item"><span>${s.question||''}</span><span class="points">${s.score!=null?s.score+'/100':'-'}</span></div>`;});
+      document.getElementById('scoreItems').innerHTML=scoresHtml;
+      let detail='';
+      if(d.studentAnswers){
+        d.studentAnswers.forEach((a,i)=>{
+          detail+=`<div class="q-section"><h4>第${i+1}问</h4><div style="background:#f0f0f0;padding:8px 12px;border-radius:6px;margin:6px 0;"><strong>你的回答：</strong>\n${a||'（未答）'}</div></div>`;
+        });
+      }
+      detail+=`<div class="q-section"><h4>📝 综合点评</h4><p>${d.summary||''}</p></div>`;
+      document.getElementById('scoreDetail').innerHTML=detail;
+    }
+
+    currentHistoryIndex=idx;
+    showHistorySummaryEdit(d.summary||d.shortSummary||'');
+    setStatus('已加载历史结果',false,true);
+  }catch(e){
+    console.error('gotoHistoryResult error:', e);
+    setStatus('加载历史结果失败：'+e.message, true, false);
+  }
+}
+
+function closeHistory(){document.getElementById('historyPanel').classList.remove('active');}
+
+// ============ 页面逻辑 ============
+function loadSettings(){const s=localStorage.getItem('sp_settings');if(s)settings=Object.assign(settings,JSON.parse(s));document.getElementById('apiUrl').value=settings.apiUrl;document.getElementById('modelName').value=settings.modelName;}
+function saveSettings(){settings.apiUrl=document.getElementById('apiUrl').value.trim();settings.modelName=document.getElementById('modelName').value.trim();localStorage.setItem('sp_settings',JSON.stringify(settings));document.getElementById('settingsPanel').classList.remove('active');setStatus('已保存',false,true);}
+function toggleSettings(){document.getElementById('settingsPanel').classList.toggle('active');}
+function showLoading(t){document.getElementById('loadingText').textContent=t||'请稍候...';document.getElementById('loadingMask').classList.add('active');}
+function hideLoading(){document.getElementById('loadingMask').classList.remove('active');}
+function setStatus(msg,isError,isOk){const bar=document.getElementById('statusBar');bar.textContent=msg;bar.className='status-bar'+(isError?' error':isOk?' ok':'');}
+
+function backHome(){
+  currentMode=''; currentDisease=''; currentCase=null;
+  currentQuestionIndex=0; studentAnswers=[]; interviewHistory=[];
+  followUpCount=0; followUpContext=''; followUpQuestion='';
+  currentHistoryIndex=-1;
+  if(prepTimer){clearInterval(prepTimer);prepTimer=null;}
+  document.getElementById('homePage').style.display='block';
+  document.getElementById('examPage').style.display='none';
+  document.getElementById('scorePanel').style.display='none';
+  document.getElementById('caseSelect').style.display='none';
+  document.getElementById('caseDisplay').innerHTML='';
+  document.getElementById('qaPhase').style.display='none';
+  document.getElementById('prepPhase').style.display='none';
+  document.getElementById('configBar').style.display='none';
+  document.getElementById('submitDiagBtn').style.display='none';
+  document.getElementById('historySummaryEdit').style.display='none';
+}
+
+function nextCase(){document.getElementById('scorePanel').style.display='none';document.getElementById('configBar').style.display='flex';document.getElementById('caseSelect').style.display='block';document.getElementById('caseDisplay').innerHTML='';document.getElementById('prepPhase').style.display='none';document.getElementById('qaPhase').style.display='none';document.getElementById('historySummaryEdit').style.display='none';populateCaseSelect();}
+
+function startMode(mode){
+  currentMode=mode; currentDisease=''; currentCase=null;
+  currentQuestionIndex=0; studentAnswers=[]; interviewHistory=[];
+  followUpCount=0; followUpContext=''; followUpQuestion='';
+  currentHistoryIndex=-1;
+  
+  document.getElementById('homePage').style.display='none';document.getElementById('examPage').style.display='block';
+  document.getElementById('scorePanel').style.display='none';document.getElementById('submitDiagBtn').style.display='none';document.getElementById('questionBox').style.display='none';
+  document.getElementById('caseSelect').style.display='block';
+  document.getElementById('caseDisplay').innerHTML='';
+  document.getElementById('qaPhase').style.display='none';
+  document.getElementById('prepPhase').style.display='none';
+  document.getElementById('historySummaryEdit').style.display='none';
+  
+  if(mode==='interview'){
+    document.getElementById('examTitle').textContent='问诊打分';
+    document.getElementById('configBar').style.display='none';
+    populateInterviewSelect();
+  }else{
+    document.getElementById('examTitle').textContent=mode==='oral_practice'?'口试练习':'口试模考';
+    document.getElementById('configBar').style.display='flex';
+    document.getElementById('configBar').innerHTML=`
+      <label>科室：</label><select id="deptSelect" onchange="onConfigChange()"><option value="all">全部</option><option value="内科">内科</option><option value="外科">外科</option><option value="妇科">妇科</option></select>
+      <label>难度：</label><select id="diffSelect" onchange="onConfigChange()"><option value="easy">简单</option><option value="medium" selected>中等</option><option value="hard">困难</option></select>
+      <label>严格：</label><select id="configStrictness" onchange="onStrictnessChange()"><option value="lenient">宽松</option><option value="medium" selected>中等</option><option value="strict">严格</option></select>
+      <label><input type="checkbox" id="comorbCheck" onchange="onComorbChange()" checked style="margin-right:4px;">含合并症</label>
+      <label><input type="checkbox" id="compCheck" onchange="onComorbChange()" checked style="margin-right:4px;">含并发症</label>`;
+        document.getElementById('configStrictness').value=settings.strictness||'medium';
+    populateCaseSelect();
+  }
+}
+
+function onStrictnessChange(){settings.strictness=document.getElementById('configStrictness').value;localStorage.setItem('sp_settings',JSON.stringify(settings));}
+function onComorbChange(){settings.wantComorbidities=document.getElementById('comorbCheck').checked;settings.wantComplications=document.getElementById('compCheck').checked;localStorage.setItem('sp_settings',JSON.stringify(settings));}
+
+function onConfigChange(){currentDept=document.getElementById('deptSelect').value;currentDifficulty=document.getElementById('diffSelect').value;populateCaseSelect();}
+
+function populateInterviewSelect(){
+  const w=document.getElementById('caseSelect');let h='<div class="cs-row"><div><label class="cs-label">病种：</label></div><div><select id="caseDropdown" multiple><option value="" selected>—— 随机 ——</option>';
+  for(const[d,list]of Object.entries(EXAM_DISEASES)){h+=`<optgroup label="${d}">`;list.forEach(x=>{h+=`<option value="${x}">${x}</option>`;});h+='</optgroup>';}
+  h+='</select></div></div><button onclick="onInterviewGenerateClick()">开始问诊</button>';w.innerHTML=h;
+}
+
+function populateCaseSelect(){
+  const w=document.getElementById('caseSelect');let h='<div class="cs-row"><div><label class="cs-label">病种：</label></div><div><select id="caseDropdown" multiple><option value="" selected>—— 随机 ——</option>';
+  for(const[d,list]of Object.entries(EXAM_DISEASES)){if(currentDept!=='all'&&currentDept!==d)continue;h+=`<optgroup label="${d}">`;list.forEach(x=>{h+=`<option value="${x}">${x}</option>`;});h+='</optgroup>';}
+  h+='</select></div></div><button onclick="onGenerateClick()">生成病例</button>';w.innerHTML=h;
+}
+
+function getChosenDiseases(){const s=document.getElementById('caseDropdown');if(!s)return[];return Array.from(s.selectedOptions).map(o=>o.value).filter(Boolean);}
+
+async function onInterviewGenerateClick(){
+  const c=getChosenDiseases();let d;
+  if(!c.length){const a=[];for(const l of Object.values(EXAM_DISEASES))a.push(...l);d=a[Math.floor(Math.random()*a.length)];}else d=c[Math.floor(Math.random()*c.length)];
+  currentDisease=d;showLoading('生成...');
+  try{currentCase=await generateCaseFromAPI(d);hideLoading();document.getElementById('caseSelect').style.display='none';document.getElementById('caseDisplay').innerHTML=`<div class="case-card"><h3>🩹 问诊：${d}</h3><p style="color:#666;">病例已隐藏，问诊获取信息。</p></div>`;document.getElementById('submitDiagBtn').style.display='inline-block';startInterviewQA();}catch(e){hideLoading();alert(e.message);}
+}
+
+async function onGenerateClick(){
+  const c=getChosenDiseases();let d;
+  if(!c.length){const a=[];for(const l of Object.values(EXAM_DISEASES))a.push(...l);d=a[Math.floor(Math.random()*a.length)];}else if(c.length===1)d=c[0];else d=c[Math.floor(Math.random()*c.length)];
+  currentDisease=d;showLoading('生成...');
+  try{currentCase=await generateCaseFromAPI(d);hideLoading();renderCaseCard();startPrep();}catch(e){hideLoading();alert(e.message);}
+}
+
+function buildCaseGenPrompt(disease){
+  const ds=DIAGNOSIS_SET[disease]||{main:disease};
+  const parts=[];
+  if(settings.wantComorbidities){ parts.push('必须包含1-2个合并症（comorbidities），并在诊断中体现'); }
+  if(settings.wantComplications){ parts.push('必须包含1-2个并发症（complications），并在诊断中体现'); }
+  const extra=parts.length?('注意：'+parts.join('；')+'。'):'注意：本例不设置合并症与并发症，诊断仅含主要诊断。';
+  return `生成病例。病种${disease}。诊断：${ds.main}。含主诉、现病史、查体、辅助检查。${extra}JSON：{"title":"病例","chief_complaint":"","history":"","physical":"","labs":"","diagnosis_checklist":[],"standard_answers":{"诊断":"","依据":"","鉴别":"","治疗":""}}`;
+}
+async function generateCaseFromAPI(disease){const p=buildCaseGenPrompt(disease);const r=await fetch(settings.apiUrl,{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({model:settings.modelName,messages:[{role:"user",content:p}]})});const d=await r.json();if(!r.ok)throw new Error(d.error?.message||'HTTP'+r.status);const result=JSON.parse(d.choices[0].message.content.replace(/```json?\s*/g,'').replace(/```/g,'').trim());result.title='病例';return result;}
+
+function renderCaseCard(){document.getElementById('caseSelect').style.display='none';const d=currentCase;document.getElementById('caseDisplay').innerHTML=`<div class="case-card"><h3>${d.title||'病例'}</h3><div class="case-info"><p><strong>主诉：</strong>${d.chief_complaint}</p><p><strong>现病史：</strong>${d.history}</p><p><strong>查体：</strong>${d.physical}</p><p><strong>辅助检查：</strong>${d.labs}</p></div></div>`;}
+
+function startPrep(){document.getElementById('prepPhase').style.display='block';document.getElementById('qaPhase').style.display='none';prepSeconds=300;currentQuestionIndex=0;studentAnswers=[];followUpCount=0;followUpContext='';followUpQuestion='';updatePrepDisplay();if(prepTimer)clearInterval(prepTimer);prepTimer=setInterval(()=>{prepSeconds--;updatePrepDisplay();if(prepSeconds<=0){clearInterval(prepTimer);startQA();}},1000);}
+
+function updatePrepDisplay(){const m=Math.floor(prepSeconds/60),s=prepSeconds%60;document.getElementById('prepPhase').innerHTML=`<h3>准备时间</h3><div class="countdown">${String(m).padStart(2,'0')}:${String(s).padStart(2,'0')}</div><button onclick="startQA()" style="margin-top:16px;padding:10px 24px;background:#1677ff;color:#fff;border:none;border-radius:8px;cursor:pointer;">跳过</button>`;}
+
+function startQA(){if(prepTimer){clearInterval(prepTimer);prepTimer=null;}document.getElementById('prepPhase').style.display='none';document.getElementById('qaPhase').style.display='block';document.getElementById('questionBox').style.display='block';document.getElementById('chatHistory').innerHTML='';document.getElementById('transcript').textContent='';initSpeechRecognition();askCurrentQuestion();}
+
+function startInterviewQA(){document.getElementById('prepPhase').style.display='none';document.getElementById('qaPhase').style.display='block';document.getElementById('questionBox').style.display='none';document.getElementById('chatHistory').innerHTML='';interviewHistory=[];initSpeechRecognition();addChatMsg('patient','👋 你好医生，我来看病。');setStatus('问诊中',false,true);}
+
+function askCurrentQuestion(){if(currentQuestionIndex>=QUESTION_SEQUENCE.length){finishExam();return;}const q=QUESTION_SEQUENCE[currentQuestionIndex];document.getElementById('questionText').textContent=q.label+'：'+q.prompt;addChatMsg('examiner',q.label+'：'+q.prompt);}
+
+function addChatMsg(role,text){const div=document.createElement('div');div.className='chat-msg '+role;div.textContent=text;document.getElementById('chatHistory').appendChild(div);document.getElementById('chatHistory').scrollTop=99999;}
+
+loadSettings();initSpeechRecognition();
+</script>
+</body>
+</html>
