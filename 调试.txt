@@ -1,0 +1,378 @@
+【路径1：vercel】
+1. 项目结构调整
+把你现在的文件夹改成这样：
+ai-sp/
+├── index.html          # 前端（改一行 apiUrl）
+├── api/
+│   └── generate.js     # 原来的 server.js 逻辑搬到这里
+├── package.json        # 依赖声明
+└── vercel.json         # 可选配置
+2. 改写 api/generate.js（核心）
+原来 server.js 里转发请求的逻辑，搬到这个文件：
+// api/generate.js
+export default async function handler(req, res) {
+  // 只允许 POST
+  if (req.method !== 'POST') {
+    return res.status(405).json({ error: 'Method not allowed' });
+  }
+
+  // API Key 从环境变量读，前端永远看不到
+  const API_KEY = process.env.API_KEY;
+  const API_BASE = process.env.API_BASE || 'https://api.deepseek.com';
+
+  try {
+    const response = await fetch(`${API_BASE}/v1/chat/completions`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'Authorization': `Bearer ${API_KEY}`
+      },
+      body: JSON.stringify({
+        model: req.body.model || 'deepseek-chat',
+        messages: req.body.messages,
+        temperature: 0.7
+      })
+    });
+
+    const data = await response.json();
+    res.status(200).json(data);
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+}
+
+3. 前端 index.html 改一行
+把设置面板里的默认 API 地址从：http://localhost:3000/api/generate
+改成：/api/generate
+
+4. package.json
+{
+  "name": "ai-sp",
+  "version": "1.0.0",
+  "dependencies": {}
+}
+
+5. 推到 GitHub
+cd D:\HuaweiMoveData\Users\Rosemary\Desktop\口试\ai-sp
+git init
+git add .
+git commit -m "init"
+git remote add origin https://github.com/你的用户名/ai-sp.git
+git push -u origin main
+
+6. Vercel 部署
+打开 https://vercel.com → 用 GitHub 登录
+Import Project → 选你的 ai-sp 仓库
+关键一步：设置环境变量
+API_KEY = sk-你的key
+API_BASE = https://api.deepseek.com（或你用的服务商地址）
+Deploy
+部署完给你一个 https://ai-sp-xxx.vercel.app，手机电脑直接打开就能用。
+7. 以后更新
+改完代码 git push，Vercel 自动重新部署，30秒生效。
+
+
+【界面问题持续更新】
+历史记录部分
+1. 删掉“（点击展开简介，展开后可进入完整结果）”
+2. “进入完整结果”的蓝色按钮改成类似于小叉那种不起眼的一个小箭头就可以，都放在右侧，小叉在右上，小箭头（→）在右下
+3. 点击“进入完整结果“没有跳转直接闪退了
+
+【分帐号】
+0. 文件结构
+ai-sp/
+├── index.html          # 主界面
+├── login.html          # 登录/注册
+├── server.js           # 代理 + 认证 + 历史（合并）
+├── init-db.js          # 一次性建库脚本
+├── ai-sp.db            # SQLite 数据库（自动生成）
+├── start.bat
+└── package.json
+
+1. powershell
+cd D:\HuaweiMoveData\Users\Rosemary\Desktop\口试\ai-sp
+npm init -y
+npm install sqlite3 bcryptjs jsonwebtoken cors
+
+2. 新建 init-db.js
+const sqlite3 = require('sqlite3').verbose();
+const bcrypt = require('bcryptjs');
+
+const db = new sqlite3.Database('./ai-sp.db');
+
+db.serialize(() => {
+  // 用户表
+  db.run(`CREATE TABLE IF NOT EXISTS users (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    username TEXT UNIQUE NOT NULL,
+    password_hash TEXT NOT NULL,
+    created_at DATETIME DEFAULT CURRENT_TIMESTAMP
+  )`);
+
+  // 邀请码表
+  db.run(`CREATE TABLE IF NOT EXISTS invite_codes (
+    code TEXT PRIMARY KEY,
+    created_by INTEGER,
+    used_by INTEGER DEFAULT NULL,
+    used_at DATETIME DEFAULT NULL,
+    max_uses INTEGER DEFAULT 1,
+    created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+    FOREIGN KEY(created_by) REFERENCES users(id)
+  )`);
+
+  // 会话表（token）
+  db.run(`CREATE TABLE IF NOT EXISTS sessions (
+    token TEXT PRIMARY KEY,
+    user_id INTEGER NOT NULL,
+    expires_at DATETIME NOT NULL,
+    FOREIGN KEY(user_id) REFERENCES users(id)
+  )`);
+
+  // 口试历史表
+  db.run(`CREATE TABLE IF NOT EXISTS exam_history (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    user_id INTEGER NOT NULL,
+    case_type TEXT,
+    total_score REAL,
+    summary TEXT,
+    full_detail TEXT,
+    created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+    FOREIGN KEY(user_id) REFERENCES users(id)
+  )`);
+
+  // 默认管理员（用户名 admin，密码 admin123，首次登录后改）
+  const hash = bcrypt.hashSync('admin123', 10);
+  db.run(`INSERT OR IGNORE INTO users (username, password_hash) VALUES (?, ?)`, ['admin', hash], function() {
+    const adminId = this.lastID || 1;
+    // 生成3个邀请码
+    const codes = ['ROSE-2024-A1', 'ROSE-2024-B2', 'ROSE-2024-C3'];
+    codes.forEach(code => {
+      db.run(`INSERT OR IGNORE INTO invite_codes (code, created_by, max_uses) VALUES (?, ?, 1)`, [code, adminId]);
+    });
+    console.log('✅ 数据库初始化完成');
+    console.log('   管理员: admin / admin123');
+    console.log('   邀请码: ROSE-2024-A1, ROSE-2024-B2, ROSE-2024-C3');
+    console.log('   请首次登录后立即修改密码！');
+  });
+});
+
+setTimeout(() => { db.close(); process.exit(0); }, 2000);
+
+
+2.1跑一次：node init-db.js
+
+3. 现有server.js开头加
+const sqlite3 = require('sqlite3').verbose();
+const bcrypt = require('bcryptjs');
+const jwt = require('jsonwebtoken');
+const cors = require('cors');
+
+const db = new sqlite3.Database('./ai-sp.db');
+const JWT_SECRET = '你的随机字符串-随便打一长串'; // 改成你自己的
+
+// 中间件：CORS（允许前端跨域）
+app.use(cors());
+
+3.1 /api/generate前后？
+// ===== 认证相关 =====
+
+// 注册（用邀请码）
+app.post('/api/auth/register', (req, res) => {
+  const { invite_code, username, password } = req.body;
+  if (!invite_code || !username || !password) {
+    return res.status(400).json({ error: '缺少参数' });
+  }
+  if (password.length < 6) {
+    return res.status(400).json({ error: '密码至少6位' });
+  }
+
+  db.get(`SELECT * FROM invite_codes WHERE code = ?`, [invite_code], (err, row) => {
+    if (err) return res.status(500).json({ error: '数据库错误' });
+    if (!row) return res.status(400).json({ error: '邀请码无效' });
+    if (row.used_by) return res.status(400).json({ error: '邀请码已使用' });
+
+    const hash = bcrypt.hashSync(password, 10);
+    db.run(`INSERT INTO users (username, password_hash) VALUES (?, ?)`, [username, hash], function(err) {
+      if (err) return res.status(400).json({ error: '用户名已存在' });
+
+      const newUserId = this.lastID;
+      // 标记邀请码已用
+      db.run(`UPDATE invite_codes SET used_by = ?, used_at = CURRENT_TIMESTAMP WHERE code = ?`, [newUserId, invite_code]);
+
+      // 生成 token
+      const token = jwt.sign({ userId: newUserId, username }, JWT_SECRET, { expiresIn: '30d' });
+      const expires = new Date(Date.now() + 30 * 24 * 60 * 60 * 1000).toISOString();
+      db.run(`INSERT INTO sessions (token, user_id, expires_at) VALUES (?, ?, ?)`, [token, newUserId, expires]);
+
+      res.json({ token, username, userId: newUserId });
+    });
+  });
+});
+
+// 登录
+app.post('/api/auth/login', (req, res) => {
+  const { username, password } = req.body;
+
+  db.get(`SELECT * FROM users WHERE username = ?`, [username], (err, user) => {
+    if (err) return res.status(500).json({ error: '数据库错误' });
+    if (!user || !bcrypt.compareSync(password, user.password_hash)) {
+      return res.status(401).json({ error: '用户名或密码错误' });
+    }
+
+    const token = jwt.sign({ userId: user.id, username: user.username }, JWT_SECRET, { expiresIn: '30d' });
+    const expires = new Date(Date.now() + 30 * 24 * 60 * 60 * 1000).toISOString();
+    db.run(`INSERT OR REPLACE INTO sessions (token, user_id, expires_at) VALUES (?, ?, ?)`, [token, user.id, expires]);
+
+    res.json({ token, username: user.username, userId: user.id });
+  });
+});
+
+// 退出
+app.post('/api/auth/logout', (req, res) => {
+  const token = req.headers.authorization?.replace('Bearer ', '');
+  if (token) {
+    db.run(`DELETE FROM sessions WHERE token = ?`, [token]);
+  }
+  res.json({ ok: true });
+});
+
+// 鉴权中间件
+function requireAuth(req, res, next) {
+  const token = req.headers.authorization?.replace('Bearer ', '');
+  if (!token) return res.status(401).json({ error: '未登录' });
+
+  db.get(`SELECT s.*, u.username FROM sessions s JOIN users u ON s.user_id = u.id WHERE s.token = ? AND s.expires_at > CURRENT_TIMESTAMP`, [token], (err, session) => {
+    if (err || !session) return res.status(401).json({ error: '登录已过期，请重新登录' });
+    req.userId = session.user_id;
+    req.username = session.username;
+    next();
+  });
+}
+
+// ===== 历史记录 =====
+
+// 保存一条口试记录
+app.post('/api/history/save', requireAuth, (req, res) => {
+  const { case_type, total_score, summary, full_detail } = req.body;
+
+  db.run(`INSERT INTO exam_history (user_id, case_type, total_score, summary, full_detail) VALUES (?, ?, ?, ?, ?)`,
+    [req.userId, case_type || '', total_score || 0, summary || '', JSON.stringify(full_detail || {})],
+    function(err) {
+      if (err) return res.status(500).json({ error: '保存失败' });
+      res.json({ id: this.lastID, ok: true });
+    }
+  );
+});
+
+// 获取当前用户历史列表
+app.get('/api/history/list', requireAuth, (req, res) => {
+  db.all(`SELECT id, case_type, total_score, summary, created_at FROM exam_history WHERE user_id = ? ORDER BY created_at DESC`, [req.userId], (err, rows) => {
+    if (err) return res.status(500).json({ error: '查询失败' });
+    res.json({ history: rows });
+  });
+});
+
+// 获取某条历史详情
+app.get('/api/history/:id', requireAuth, (req, res) => {
+  db.get(`SELECT * FROM exam_history WHERE id = ? AND user_id = ?`, [req.params.id, req.userId], (err, row) => {
+    if (err || !row) return res.status(404).json({ error: '记录不存在' });
+    res.json({ history: { ...row, full_detail: JSON.parse(row.full_detail || '{}') } });
+  });
+});
+
+// 删除某条历史
+app.delete('/api/history/:id', requireAuth, (req, res) => {
+  db.run(`DELETE FROM exam_history WHERE id = ? AND user_id = ?`, [req.params.id, req.userId], (err) => {
+    if (err) return res.status(500).json({ error: '删除失败' });
+    res.json({ ok: true });
+  });
+});
+
+// ===== 管理员：生成邀请码 =====
+app.post('/api/admin/invite', requireAuth, (req, res) => {
+  // 简单判断：admin 或前3个注册用户可生成
+  db.get(`SELECT id FROM users WHERE id = ?`, [req.userId], (err, user) => {
+    if (!user) return res.status(403).json({ error: '无权限' });
+    const code = 'ROSE-' + Math.random().toString(36).substring(2, 8).toUpperCase();
+    db.run(`INSERT INTO invite_codes (code, created_by, max_uses) VALUES (?, ?, 1)`, [code, req.userId]);
+    res.json({ code });
+  });
+});
+
+4. 前端改动
+新建login.html:
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>医学口试系统 - 登录</title>
+<style>
+  body { font-family: -apple-system, BlinkMacSystemFont, sans-serif; background: #f0f2f5; display: flex; align-items: center; justify-content: center; height: 100vh; margin: 0; }
+  .box { background: white; padding: 32px; border-radius: 12px; box-shadow: 0 2px 12px rgba(0,0,0,0.1); width: 320px; }
+  h2 { margin: 0 0 24px; text-align: center; }
+  input { width: 100%; padding: 10px 12px; margin-bottom: 12px; border: 1px solid #ddd; border-radius: 8px; box-sizing: border-box; font-size: 16px; }
+  button { width: 100%; padding: 10px; background: #4f46e5; color: white; border: none; border-radius: 8px; font-size: 16px; cursor: pointer; }
+  button:hover { background: #4338ca; }
+  .switch { text-align: center; margin-top: 12px; font-size: 14px; color: #666; cursor: pointer; }
+  .switch:hover { color: #4f46e5; }
+  .error { color: #ef4444; font-size: 14px; margin-bottom: 8px; text-align: center; }
+</style>
+</head>
+<body>
+<div class="box">
+  <h2 id="title">登录</h2>
+  <div class="error" id="error"></div>
+  <input id="f1" placeholder="用户名">
+  <input id="f2" type="password" placeholder="密码">
+  <input id="f3" placeholder="邀请码（注册时填）" style="display:none">
+  <button onclick="submit()">登录</button>
+  <div class="switch" onclick="toggle()">没有账号？点击注册</div>
+</div>
+<script>
+let mode = 'login';
+function toggle() {
+  mode = mode === 'login' ? 'register' : 'login';
+  document.getElementById('title').textContent = mode === 'login' ? '登录' : '注册';
+  document.querySelector('button').textContent = mode === 'login' ? '登录' : '注册';
+  document.querySelector('.switch').textContent = mode === 'login' ? '没有账号？点击注册' : '已有账号？点击登录';
+  document.getElementById('f3').style.display = mode === 'register' ? 'block' : 'none';
+  document.getElementById('error').textContent = '';
+}
+function submit() {
+  const d = { username: f1.value, password: f2.value };
+  if (mode === 'register') { d.invite_code = f3.value; }
+  fetch(`/api/auth/${mode}`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(d)
+  }).then(r => r.json()).then(d => {
+    if (d.error) { error.textContent = d.error; return; }
+    localStorage.setItem('token', d.token);
+    localStorage.setItem('username', d.username);
+    window.location.href = '/';
+  });
+}
+</script>
+</body>
+</html>
+
+
+4.2 index.html，原来存 localStorage 的地方，改成
+// 保存
+function saveExamToServer(caseType, score, summary, fullDetail) {
+  fetch('/api/history/save', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ case_type: caseType, total_score: score, summary, full_detail: fullDetail })
+  });
+}
+
+// 加载列表
+function loadHistoryList() {
+  fetch('/api/history/list')
+    .then(r => r.json())
+    .then(d => { /* 渲染历史列表 */ });
+}
+
+
