@@ -140,9 +140,53 @@ body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", "PingFang SC"
 .diag-input-box .diag-btns button { padding: 8px 20px; border: none; border-radius: 8px; cursor: pointer; font-size: 14px; }
 .diag-submit { background: #1677ff; color: #fff; }
 .diag-cancel { background: #ddd; color: #333; }
+/* ===== 移动端适配 & 新增样式 ===== */
+.text-fallback textarea { min-height: 90px; }
+.draft-btns { display: flex; gap: 8px; flex-wrap: wrap; margin-top: 8px; }
+.draft-btns button { padding: 9px 18px; background: #1677ff; color: #fff; border: none; border-radius: 8px; font-size: 14px; cursor: pointer; }
+.draft-btns button.ghost { background: #fff; color: #555; border: 1px solid #ddd; }
+.err-box { display: none; background: #fff1f0; border: 1px solid #ffa39e; border-radius: 8px; padding: 12px 16px; margin-bottom: 16px; color: #cf1322; }
+.err-box.active { display: block; }
+.js-error { position: fixed; left: 0; right: 0; top: 0; z-index: 9999; background: #cf1322; color: #fff; font: 12px/1.5 -apple-system, "PingFang SC", sans-serif; padding: 8px 12px; word-break: break-all; }
+@media (max-width: 640px) {
+  .container { padding: 12px; }
+  .settings-panel { width: calc(100vw - 24px); right: 12px; top: 46px; }
+  .home-page { padding: 46px 12px; }
+  .home-page h1 { font-size: 22px; }
+  .mode-card { padding: 20px 16px; }
+  .case-select .cs-row { flex-direction: column; gap: 8px; }
+  .case-select label.cs-label { min-width: 0; }
+  .case-select select { min-width: 0; width: 100%; height: 140px; }
+  .exam-header { margin-top: 34px; }
+  .chat-history { max-height: 42vh; }
+  .record-btn { width: 96px; height: 96px; }
+  .prep-phase .countdown { font-size: 48px; }
+  .history-box { width: calc(100vw - 24px); padding: 16px; }
+  .score-panel { padding: 16px; }
+  .question-box { padding: 14px 16px; }
+}
 </style>
 </head>
 <body>
+<script>
+// 脚本错误/请求错误直接显示在页面顶部，手机上也能看到，便于排查
+(function () {
+  function banner(text) {
+    try {
+      var d = document.createElement('div');
+      d.className = 'js-error';
+      d.textContent = text;
+      document.body.appendChild(d);
+    } catch (e) {}
+  }
+  window.addEventListener('error', function (e) {
+    banner('页面脚本出错：' + (e.message || e.error) + ' @' + (e.filename || '') + ':' + (e.lineno || ''));
+  });
+  window.addEventListener('unhandledrejection', function (e) {
+    banner('页面请求出错：' + ((e.reason && e.reason.message) || e.reason));
+  });
+})();
+</script>
 <div class="loading-mask" id="loadingMask"><div class="loading-box"><div class="spinner"></div><div id="loadingText">请稍候...</div></div></div>
 
 <div class="history-panel" id="historyPanel">
@@ -208,7 +252,7 @@ body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", "PingFang SC"
         <div class="question-text" id="questionText"></div>
       </div>
       <div class="record-area">
-        <button class="record-btn" id="recordBtn" onmousedown="startRecord()" onmouseup="stopRecord()" ontouchstart="startRecord()" ontouchend="stopRecord()">按住<br>说话</button>
+        <button class="record-btn" id="recordBtn" ontouchstart="event.preventDefault();startRecord()" ontouchend="event.preventDefault();stopRecord()" onmousedown="startRecord()" onmouseup="stopRecord()" onmouseleave="stopRecord()" oncontextmenu="return false">按住<br>说话</button>
         <div class="transcript" id="transcript"></div>
         <div class="text-fallback" id="textFallback"></div>
       </div>
@@ -349,36 +393,193 @@ function localKeywordCheck(answerText) {
   return { passed, score: Math.round(weightedScore * 100), missedKws: missedKws.slice(0, 5), maxFollowUps, weightedScore };
 }
 
-// ============ 语音识别 ============
+// ============ 语音识别（可修改后再提交） ============
 let recognition = null, finalTranscript = '', interimTranscript = '', speechSupported = false;
+let recogWanted = false, recogRestartTimer = null, recogRestarts = 0;
+let recogResults = {};   // 按结果索引累积，避免后一段话把前面的覆盖掉（原来会丢字）
+
+function transcriptEl(){ return document.getElementById('transcript'); }
+
+function renderTranscriptLive(){
+  const el = transcriptEl();
+  if (!el) return;
+  const text = (finalTranscript + interimTranscript).trim();
+  el.textContent = text || '🎤 聆听中...';
+}
+
+function draftEl(){
+  let ta = document.getElementById('answerDraft');
+  if (ta) return ta;
+  const host = document.getElementById('textFallback');
+  if (!host) return null;
+  host.innerHTML = '<textarea id="answerDraft" placeholder="识别结果会出现在这里，可以直接改字；也可以直接用输入法的语音输入，确认后点提交"></textarea>'
+    + '<div class="draft-btns">'
+    + '<button onclick="submitDraft()">✅ 提交答案</button>'
+    + '<button class="ghost" onclick="clearDraft()">清空</button>'
+    + '<button class="ghost" onclick="polishDraft()">🪄 医学词纠错</button>'
+    + '</div>';
+  return document.getElementById('answerDraft');
+}
+
+function showTextFallback(){ draftEl(); }
+
+function resetAnswerArea(){
+  finalTranscript = ''; interimTranscript = ''; recogResults = {};
+  const el = transcriptEl(); if (el) el.textContent = '';
+  const ta = draftEl(); if (ta) ta.value = '';
+}
+
+function clearDraft(){
+  finalTranscript = ''; interimTranscript = ''; recogResults = {};
+  const ta = draftEl(); if (ta) ta.value = '';
+  const el = transcriptEl(); if (el) el.textContent = '';
+  setStatus('已清空', false, false);
+}
+
+function updateRecordBtn(){
+  const b = document.getElementById('recordBtn');
+  if (!b) return;
+  if (isRecording) { b.classList.add('recording'); b.innerHTML = '松开<br>结束'; }
+  else { b.classList.remove('recording'); b.innerHTML = '按住<br>说话'; }
+}
 
 function initSpeechRecognition() {
   const SR = window.SpeechRecognition || window.webkitSpeechRecognition;
-  if (!SR) { showTextFallback(); return false; }
-  recognition = new SR(); recognition.continuous = true; recognition.interimResults = true; recognition.lang = 'zh-CN';
+  if (!SR) { speechSupported = false; showTextFallback(); return false; }
+  if (recognition) { speechSupported = true; return true; }
+
+  recognition = new SR();
+  recognition.continuous = true;
+  recognition.interimResults = true;
+  recognition.lang = 'zh-CN';
   speechSupported = true;
-  recognition.onstart = () => { finalTranscript=''; interimTranscript=''; document.getElementById('transcript').textContent='🎤 聆听中...'; setStatus('语音识别中...',false,false); };
-  recognition.onresult = e => { interimTranscript=''; finalTranscript=''; for(let i=e.resultIndex;i<e.results.length;i++){const t=e.results[i][0].transcript;if(e.results[i].isFinal)finalTranscript+=t;else interimTranscript+=t;} document.getElementById('transcript').textContent=finalTranscript+interimTranscript||'🎤 聆听中...'; };
-  recognition.onerror = e => { document.getElementById('transcript').textContent='❌ 语音出错'; isRecording=false; setStatus('语音出错',true,false); };
-  recognition.onend = () => { isRecording=false; };
+
+  recognition.onstart = () => { setStatus('语音识别中...', false, false); };
+
+  recognition.onresult = (e) => {
+    for (let i = e.resultIndex; i < e.results.length; i++) {
+      const res = e.results[i];
+      if (res.isFinal) recogResults[i] = res[0].transcript;
+      else interimTranscript = res[0].transcript;
+    }
+    finalTranscript = Object.keys(recogResults)
+      .map(Number).sort((a, b) => a - b)
+      .map(k => recogResults[k]).join('');
+    renderTranscriptLive();
+  };
+
+  recognition.onerror = (e) => {
+    const err = (e && e.error) ? e.error : 'unknown';
+    if (err === 'no-speech' || err === 'aborted') return;
+    if (err === 'network' || err === 'service-not-allowed' || err === 'language-not-supported') {
+      recogWanted = false; isRecording = false; updateRecordBtn();
+      const el = transcriptEl();
+      if (el) el.textContent = '⚠ 浏览器自带的语音服务连不上（' + err + '），请直接打字，或用输入法自带的语音输入';
+      setStatus('语音服务不可用，请改用文字输入', true, false);
+      return;
+    }
+    if (err === 'not-allowed' || err === 'audio-capture') {
+      recogWanted = false; isRecording = false; updateRecordBtn();
+      setStatus('麦克风权限被拒绝或找不到麦克风', true, false);
+      return;
+    }
+    setStatus('语音识别出错（' + err + '），可改用文字输入', true, false);
+  };
+
+  recognition.onend = () => {
+    if (!recogWanted) { isRecording = false; updateRecordBtn(); return; }
+    if (recogRestarts < 20) {
+      recogRestarts++;
+      clearTimeout(recogRestartTimer);
+      recogRestartTimer = setTimeout(() => { if (recogWanted) { try { recognition.start(); } catch (e) {} } }, 250);
+      return;
+    }
+    recogWanted = false; isRecording = false; updateRecordBtn();
+    finishRecognition();
+  };
   return true;
 }
 
-function showTextFallback() { const fb=document.getElementById('textFallback'); if(fb&&!fb.innerHTML) fb.innerHTML='<textarea id="textAnswerInput" placeholder="打字回答..."></textarea><button onclick="submitTextAnswer()">提交</button>'; }
-
 function startRecord() {
-  if(!speechSupported){if(!recognition)initSpeechRecognition();if(!speechSupported)return;} if(isRecording||isWaitingForAI)return;
-  isRecording=true; document.getElementById('recordBtn').classList.add('recording');
-  try{recognition.start();}catch(e){setTimeout(()=>{try{recognition.start();}catch(e2){}},200);}
+  if (isWaitingForAI) return;
+  if (!speechSupported && !initSpeechRecognition()) {
+    showTextFallback();
+    setStatus('这个浏览器不支持语音识别，请直接在下方打字，或用输入法的语音输入', true, false);
+    return;
+  }
+  if (isRecording) return;
+  isRecording = true; recogWanted = true; recogRestarts = 0;
+  finalTranscript = ''; interimTranscript = ''; recogResults = {};
+  const el = transcriptEl(); if (el) el.textContent = '🎤 聆听中...';
+  updateRecordBtn();
+  try {
+    recognition.start();
+  } catch (e) {
+    setTimeout(() => {
+      if (!recogWanted) return;
+      try { recognition.start(); }
+      catch (e2) {
+        isRecording = false; recogWanted = false; updateRecordBtn();
+        setStatus('麦克风启动失败，请重试', true, false);
+      }
+    }, 300);
+  }
 }
-function stopRecord() {
-  if(!isRecording)return; isRecording=false; document.getElementById('recordBtn').classList.remove('recording');
-  if(recognition)recognition.stop();
-  setTimeout(()=>{ const text=(finalTranscript+interimTranscript).trim(); if(text){ document.getElementById('transcript').textContent=text; addChatMsg('student',text); if(currentMode==='interview')processInterviewInput(text); else processStudentAnswer(text); } else {document.getElementById('transcript').textContent='⚠ 未识别到语音';showTextFallback();} },600);
-}
-function submitTextAnswer(){ const input=document.getElementById('textAnswerInput'); if(!input)return; const text=input.value.trim(); if(!text)return; document.getElementById('transcript').textContent=text; addChatMsg('student',text); input.value=''; if(currentMode==='interview')processInterviewInput(text); else processStudentAnswer(text); }
 
-// ============ 问诊模式 ============
+function stopRecord() {
+  if (!isRecording) return;
+  isRecording = false; recogWanted = false; updateRecordBtn();
+  clearTimeout(recogRestartTimer);
+  try { if (recognition) recognition.stop(); } catch (e) {}
+  setTimeout(finishRecognition, 700);
+}
+
+function finishRecognition() {
+  const text = (finalTranscript + interimTranscript).trim();
+  const ta = draftEl();
+  if (ta) ta.value = text;
+  const el = transcriptEl();
+  if (el) el.textContent = text ? text + '（可修改后提交）' : '⚠ 没识别到内容，请重试或直接打字';
+  setStatus(text ? '识别完成，确认或修改后点「提交答案」' : '未识别到语音', !text, !!text);
+}
+
+function submitDraft() {
+  const ta = document.getElementById('answerDraft');
+  const text = ((ta && ta.value) || '').trim();
+  if (!text) { alert('请先说话或输入答案'); return; }
+  if (ta) ta.value = '';
+  const el = transcriptEl(); if (el) el.textContent = text;
+  addChatMsg('student', text);
+  if (currentMode === 'interview') processInterviewInput(text);
+  else processStudentAnswer(text);
+}
+
+function submitTextAnswer(){ submitDraft(); }
+
+async function polishDraft() {
+  const ta = document.getElementById('answerDraft');
+  if (!ta || !ta.value.trim()) { alert('先说话或输入内容'); return; }
+  if (isWaitingForAI) return;
+  isWaitingForAI = true;
+  const raw = ta.value.trim();
+  setStatus('正在纠正同音错字...', false, false);
+  try {
+    const prompt = '下面是医学生口述答案的语音识别结果，可能有同音错字。请只修正明显的同音错字和缺少的标点，'
+      + '不要增加、删除、改写任何信息，保持原意，直接输出修正后的文字，不要解释：\n' + raw;
+    const r = await fetch(settings.apiUrl, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ model: settings.modelName, messages: [{ role: 'user', content: prompt }], temperature: 0.1 }) });
+    const rawText = await r.text();
+    let d; try { d = JSON.parse(rawText); } catch (e) { throw new Error('接口返回异常（HTTP ' + r.status + '）'); }
+    if (!r.ok || (d && d.error)) throw new Error((d && d.error && (d.error.message || d.error)) || ('HTTP ' + r.status));
+    const fixed = ((d.choices && d.choices[0] && d.choices[0].message && d.choices[0].message.content) || '').trim();
+    if (fixed) ta.value = fixed.replace(/^["“]|["”]$/g, '');
+    const el = transcriptEl(); if (el) el.textContent = ta.value;
+    setStatus('已纠错，可再手动修改', false, true);
+  } catch (e) {
+    setStatus('纠错失败：' + e.message, true, false);
+  } finally {
+    isWaitingForAI = false;
+  }
+}// ============ 问诊模式 ============
 async function processInterviewInput(text) {
   if(isWaitingForAI)return; isWaitingForAI=true; const btn=document.getElementById('recordBtn'); if(btn)btn.disabled=true;
   setStatus('🤔 患者思考中...',false,false); interviewHistory.push({role:'student',content:text});
@@ -386,7 +587,7 @@ async function processInterviewInput(text) {
   const prompt=`你是一位患者。病种：${currentDisease}。标准诊断：${ds.main}。病例：${JSON.stringify(currentCase)}。对话历史：${JSON.stringify(interviewHistory.slice(-8))}。医生刚才说："${text}"。扮演患者回答，只说患者知道的信息，口语化，50字内，直接输出。`;
   try{
     const r=await fetch(settings.apiUrl,{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({model:settings.modelName,messages:[{role:"user",content:prompt}]})});
-    const data=await r.json(); if(!r.ok)throw new Error(data.error?.message||'HTTP'+r.status);
+    const data=await r.json(); if(!r.ok)throw new Error((data.error&&data.error.message)||'HTTP'+r.status);
     const reply=data.choices[0].message.content.trim();
     addChatMsg('patient','🧑‍⚕️ '+reply); interviewHistory.push({role:'patient',content:reply}); setStatus('就绪，继续问诊',false,true);
   }catch(e){addChatMsg('patient','（患者未回应）');setStatus('失败',true,false);}
@@ -432,7 +633,7 @@ JSON格式：
 
   try{
     const r=await fetch(settings.apiUrl,{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({model:settings.modelName,messages:[{role:"user",content:prompt}]})});
-    const data=await r.json(); if(!r.ok)throw new Error(data.error?.message||'HTTP'+r.status);
+    const data=await r.json(); if(!r.ok)throw new Error((data.error&&data.error.message)||'HTTP'+r.status);
     const result=JSON.parse(data.choices[0].message.content.replace(/```json?\s*/g,'').replace(/```/g,'').trim());
     
     document.getElementById('scorePanelTitle').textContent='📋 问诊评分（基于问诊过程）';
@@ -518,7 +719,7 @@ async function processStudentAnswer(answerText) {
   // 解析AI结果，失败自动重试一次
   async function callAndParse(){
     const r=await fetch(settings.apiUrl,{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({model:settings.modelName,messages:[{role:"user",content:prompt}],temperature:0.3})});
-    const data=await r.json(); if(!r.ok)throw new Error(data.error?.message||('HTTP'+r.status));
+    const data=await r.json(); if(!r.ok)throw new Error((data.error&&data.error.message)||('HTTP'+r.status));
     const raw=data.choices&&data.choices[0]&&data.choices[0].message&&data.choices[0].message.content||'';
     const cleaned=raw.replace(/```json?\s*/gi,'').replace(/```/g,'').trim();
     let a=null;
@@ -606,7 +807,7 @@ async function finishExam() {
 {"scores":[{"question":"${QUESTION_SEQUENCE[0].label}","score":85,"reason":""},{"question":"${QUESTION_SEQUENCE[1].label}","score":80,"reason":""},{"question":"${QUESTION_SEQUENCE[2].label}","score":85,"reason":""}],"details":[{"question":"${QUESTION_SEQUENCE[0].label}","std_answer":"","missed":"","comment":""},{"question":"${QUESTION_SEQUENCE[1].label}","std_answer":"","missed":"","comment":""},{"question":"${QUESTION_SEQUENCE[2].label}","std_answer":"","missed":"","comment":""}],"summary":""}`;
   try{
     const r=await fetch(settings.apiUrl,{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({model:settings.modelName,messages:[{role:"user",content:prompt}]})});
-    const data=await r.json(); if(!r.ok)throw new Error(data.error?.message||'HTTP'+r.status);
+    const data=await r.json(); if(!r.ok)throw new Error((data.error&&data.error.message)||'HTTP'+r.status);
     const result=JSON.parse(data.choices[0].message.content.replace(/```json?\s*/g,'').replace(/```/g,'').trim());
     let scoresHtml=''; result.scores.forEach(s=>{scoresHtml+=`<div class="score-item"><span>${s.question}</span><span class="points">${s.score}/100</span></div>`;});
     document.getElementById('scoreItems').innerHTML=scoresHtml;
@@ -890,7 +1091,7 @@ function loadSettings(){
   localStorage.setItem('sp_settings',JSON.stringify(settings));
 }
 function saveSettings(){settings.apiUrl=normalizeApiUrl(document.getElementById('apiUrl').value);settings.modelName=normalizeModelName(document.getElementById('modelName').value);document.getElementById('apiUrl').value=settings.apiUrl;document.getElementById('modelName').value=settings.modelName;localStorage.setItem('sp_settings',JSON.stringify(settings));document.getElementById('settingsPanel').classList.remove('active');setStatus('已保存',false,true);}
-function saveSettings(){settings.apiUrl=document.getElementById('apiUrl').value.trim();settings.modelName=document.getElementById('modelName').value.trim();localStorage.setItem('sp_settings',JSON.stringify(settings));document.getElementById('settingsPanel').classList.remove('active');setStatus('已保存',false,true);}
+
 function toggleSettings(){document.getElementById('settingsPanel').classList.toggle('active');}
 function showLoading(t){document.getElementById('loadingText').textContent=t||'请稍候...';document.getElementById('loadingMask').classList.add('active');}
 function hideLoading(){document.getElementById('loadingMask').classList.remove('active');}
@@ -1019,9 +1220,9 @@ function startPrep(){document.getElementById('prepPhase').style.display='block';
 
 function updatePrepDisplay(){const m=Math.floor(prepSeconds/60),s=prepSeconds%60;document.getElementById('prepPhase').innerHTML=`<h3>准备时间</h3><div class="countdown">${String(m).padStart(2,'0')}:${String(s).padStart(2,'0')}</div><button onclick="startQA()" style="margin-top:16px;padding:10px 24px;background:#1677ff;color:#fff;border:none;border-radius:8px;cursor:pointer;">跳过</button>`;}
 
-function startQA(){if(prepTimer){clearInterval(prepTimer);prepTimer=null;}document.getElementById('prepPhase').style.display='none';document.getElementById('qaPhase').style.display='block';document.getElementById('questionBox').style.display='block';document.getElementById('chatHistory').innerHTML='';document.getElementById('transcript').textContent='';initSpeechRecognition();askCurrentQuestion();}
+function startQA(){resetAnswerArea();if(prepTimer){clearInterval(prepTimer);prepTimer=null;}document.getElementById('prepPhase').style.display='none';document.getElementById('qaPhase').style.display='block';document.getElementById('questionBox').style.display='block';document.getElementById('chatHistory').innerHTML='';document.getElementById('transcript').textContent='';initSpeechRecognition();askCurrentQuestion();}
 
-function startInterviewQA(){document.getElementById('prepPhase').style.display='none';document.getElementById('qaPhase').style.display='block';document.getElementById('questionBox').style.display='none';document.getElementById('chatHistory').innerHTML='';interviewHistory=[];initSpeechRecognition();addChatMsg('patient','👋 你好医生，我来看病。');setStatus('问诊中',false,true);}
+function startInterviewQA(){resetAnswerArea();document.getElementById('prepPhase').style.display='none';document.getElementById('qaPhase').style.display='block';document.getElementById('questionBox').style.display='none';document.getElementById('chatHistory').innerHTML='';interviewHistory=[];initSpeechRecognition();addChatMsg('patient','👋 你好医生，我来看病。');setStatus('问诊中',false,true);}
 
 function askCurrentQuestion(){if(currentQuestionIndex>=QUESTION_SEQUENCE.length){finishExam();return;}const q=QUESTION_SEQUENCE[currentQuestionIndex];document.getElementById('questionText').textContent=q.label+'：'+q.prompt;addChatMsg('examiner',q.label+'：'+q.prompt);}
 
