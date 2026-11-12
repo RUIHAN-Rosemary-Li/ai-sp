@@ -171,7 +171,7 @@ body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", "PingFang SC"
     <label>API 地址</label>
     <input type="text" id="apiUrl" value="/api/generate" />
     <label>模型名称</label>
-    <input type="text" id="modelName" value="deepseek/deepseek-flash" />
+    <input type="text" id="modelName" value="deepseek-chat" />
     <div class="notice">严格程度请在口试模式的工具栏中选择。</div>
     <button onclick="saveSettings()">保存</button>
   </div>
@@ -274,7 +274,7 @@ for (const list of Object.values(EXAM_DISEASES)) {
 }
 
 // ============ 全局状态 ============
-let settings = { apiUrl: 'http://localhost:3000/api/generate', modelName: 'deepseek/deepseek-flash', strictness: 'medium', wantComorbidities: true, wantComplications: true };
+let settings = { apiUrl: '/api/generate', modelName: 'deepseek-chat', strictness: 'medium', wantComorbidities: true, wantComplications: true };
 let currentMode = '', currentDisease = '', currentCase = null;
 let prepTimer = null, prepSeconds = 300;
 let isRecording = false, currentQuestionIndex = 0;
@@ -865,7 +865,31 @@ function gotoHistoryResult(idx){
 function closeHistory(){document.getElementById('historyPanel').classList.remove('active');}
 
 // ============ 页面逻辑 ============
-function loadSettings(){const s=localStorage.getItem('sp_settings');if(s)settings=Object.assign(settings,JSON.parse(s));document.getElementById('apiUrl').value=settings.apiUrl;document.getElementById('modelName').value=settings.modelName;}
+function normalizeApiUrl(u){
+  u=String(u||'').trim();
+  if(!u) return '/api/generate';
+  // 只有页面本身部署在线上时，才把旧的本机地址自动纠正为同源接口
+  const localPage=/^(localhost|127\.0\.0\.1)?$/i.test(location.hostname)||location.protocol==='file:';
+  if(!localPage&&/(^|\/\/)(localhost|127\.0\.0\.1|0\.0\.0\.0)(:|\/|$)/i.test(u)) return '/api/generate';
+  return u;
+}
+function normalizeModelName(m){
+  m=String(m||'').trim();
+  // 旧默认值 deepseek/deepseek-flash 带厂商前缀，官方接口不认
+  if(!m||m.includes('/')) return 'deepseek-chat';
+  return m;
+}
+function loadSettings(){
+  const s=localStorage.getItem('sp_settings');
+  if(s){try{settings=Object.assign(settings,JSON.parse(s));}catch(e){}}
+  settings.apiUrl=normalizeApiUrl(settings.apiUrl);
+  settings.modelName=normalizeModelName(settings.modelName);
+  const u=document.getElementById('apiUrl'),m=document.getElementById('modelName');
+  if(u)u.value=settings.apiUrl;
+  if(m)m.value=settings.modelName;
+  localStorage.setItem('sp_settings',JSON.stringify(settings));
+}
+function saveSettings(){settings.apiUrl=normalizeApiUrl(document.getElementById('apiUrl').value);settings.modelName=normalizeModelName(document.getElementById('modelName').value);document.getElementById('apiUrl').value=settings.apiUrl;document.getElementById('modelName').value=settings.modelName;localStorage.setItem('sp_settings',JSON.stringify(settings));document.getElementById('settingsPanel').classList.remove('active');setStatus('已保存',false,true);}
 function saveSettings(){settings.apiUrl=document.getElementById('apiUrl').value.trim();settings.modelName=document.getElementById('modelName').value.trim();localStorage.setItem('sp_settings',JSON.stringify(settings));document.getElementById('settingsPanel').classList.remove('active');setStatus('已保存',false,true);}
 function toggleSettings(){document.getElementById('settingsPanel').classList.toggle('active');}
 function showLoading(t){document.getElementById('loadingText').textContent=t||'请稍候...';document.getElementById('loadingMask').classList.add('active');}
@@ -965,7 +989,29 @@ function buildCaseGenPrompt(disease){
   const extra=parts.length?('注意：'+parts.join('；')+'。'):'注意：本例不设置合并症与并发症，诊断仅含主要诊断。';
   return `生成病例。病种${disease}。诊断：${ds.main}。含主诉、现病史、查体、辅助检查。${extra}JSON：{"title":"病例","chief_complaint":"","history":"","physical":"","labs":"","diagnosis_checklist":[],"standard_answers":{"诊断":"","依据":"","鉴别":"","治疗":""}}`;
 }
-async function generateCaseFromAPI(disease){const p=buildCaseGenPrompt(disease);const r=await fetch(settings.apiUrl,{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({model:settings.modelName,messages:[{role:"user",content:p}]})});const d=await r.json();if(!r.ok)throw new Error(d.error?.message||'HTTP'+r.status);const result=JSON.parse(d.choices[0].message.content.replace(/```json?\s*/g,'').replace(/```/g,'').trim());result.title='病例';return result;}
+async function generateCaseFromAPI(disease){
+  const p=buildCaseGenPrompt(disease);
+  let r;
+  try{
+    r=await fetch(settings.apiUrl,{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({model:settings.modelName,messages:[{role:"user",content:p}]})});
+  }catch(e){
+    throw new Error('无法连接 AI 接口（'+settings.apiUrl+'）。请点设置，把 API 地址改成 /api/generate 后重试。');
+  }
+  const rawText=await r.text();
+  let d;
+  try{d=JSON.parse(rawText);}catch(e){throw new Error('AI 接口返回异常（HTTP '+r.status+'）：'+rawText.slice(0,160));}
+  if(!r.ok||(d&&d.error))throw new Error((d&&d.error&&(d.error.message||d.error))||('HTTP '+r.status));
+  const content=(d.choices&&d.choices[0]&&d.choices[0].message&&d.choices[0].message.content)||'';
+  const cleaned=content.replace(/```json?\s*/gi,'').replace(/```/g,'').trim();
+  let result;
+  try{result=JSON.parse(cleaned);}catch(e){
+    const m=cleaned.match(/\{[\s\S]*\}/);
+    if(!m)throw new Error('AI 返回内容无法解析为 JSON：'+cleaned.slice(0,120));
+    result=JSON.parse(m[0]);
+  }
+  result.title='病例';
+  return result;
+}
 
 function renderCaseCard(){document.getElementById('caseSelect').style.display='none';const d=currentCase;document.getElementById('caseDisplay').innerHTML=`<div class="case-card"><h3>${d.title||'病例'}</h3><div class="case-info"><p><strong>主诉：</strong>${d.chief_complaint}</p><p><strong>现病史：</strong>${d.history}</p><p><strong>查体：</strong>${d.physical}</p><p><strong>辅助检查：</strong>${d.labs}</p></div></div>`;}
 
