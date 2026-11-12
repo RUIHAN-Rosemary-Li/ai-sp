@@ -165,6 +165,9 @@ body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", "PingFang SC"
   .score-panel { padding: 16px; }
   .question-box { padding: 14px 16px; }
 }
+.mic-help { margin-top: 10px; }
+.mic-help button { padding: 8px 16px; background: #fff; color: #1677ff; border: 1px solid #1677ff; border-radius: 8px; font-size: 14px; cursor: pointer; }
+.mic-help .mic-help-text { margin-top: 6px; font-size: 12px; color: #999; line-height: 1.6; }
 </style>
 </head>
 <body>
@@ -253,7 +256,10 @@ body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", "PingFang SC"
       </div>
       <div class="record-area">
         <button class="record-btn" id="recordBtn" ontouchstart="event.preventDefault();startRecord()" ontouchend="event.preventDefault();stopRecord()" onmousedown="startRecord()" onmouseup="stopRecord()" onmouseleave="stopRecord()" oncontextmenu="return false">按住<br>说话</button>
-        <div class="transcript" id="transcript"></div>
+                <div class="mic-help" id="micHelp" style="display:none;">
+          <button onclick="requestMicPermission()">🔓 开启麦克风权限</button>
+          <div class="mic-help-text">一直提示"麦克风不可用"时，点这里并按浏览器提示允许</div>
+        </div><div class="transcript" id="transcript"></div>
         <div class="text-fallback" id="textFallback"></div>
       </div>
       <div class="status-bar" id="statusBar">就绪</div>
@@ -443,6 +449,50 @@ function updateRecordBtn(){
   else { b.classList.remove('recording'); b.innerHTML = '按住<br>说话'; }
 }
 
+function showMicHelp(){ const h = document.getElementById('micHelp'); if (h) h.style.display = 'block'; }
+function hideMicHelp(){ const h = document.getElementById('micHelp'); if (h) h.style.display = 'none'; }
+
+async function requestMicPermission(){
+  if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) {
+    alert('这个浏览器不支持网页录音。\n请换用 Chrome / Safari 打开；或直接点下方输入框，用输入法的 🎤 语音输入。');
+    return;
+  }
+  setStatus('正在请求麦克风权限...', false, false);
+  try {
+    const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+    stream.getTracks().forEach(function (t) { t.stop(); });
+    hideMicHelp();
+    setStatus('麦克风已授权，按住「说话」即可', false, true);
+  } catch (e) {
+    const n = (e && e.name) || '';
+    let msg;
+    if (n === 'NotAllowedError' || n === 'SecurityError') {
+      msg = '浏览器拒绝了麦克风权限。\n\n'
+        + '1. 点地址栏左侧的 🔒 或 ⚙ →「权限」→ 麦克风 → 允许，然后刷新页面\n'
+        + '2. 手机系统里也要允许浏览器用麦克风：设置 → 应用 → 浏览器 → 权限 → 麦克风\n'
+        + '3. 如果是在微信里打开的：点右上角「⋯」→「在浏览器中打开」';
+    } else if (n === 'NotFoundError' || n === 'DevicesNotFoundError') {
+      msg = '没有找到麦克风设备。';
+    } else if (n === 'NotReadableError') {
+      msg = '麦克风被其他应用占用（比如正在通话/录音），关掉后重试。';
+    } else {
+      msg = '开启麦克风失败：' + ((e && e.message) || n);
+    }
+    alert(msg);
+    setStatus('麦克风不可用，请按提示在浏览器里允许麦克风', true, false);
+    showMicHelp();
+  }
+}
+
+function checkMicState(){
+  try {
+    if (navigator.permissions && navigator.permissions.query) {
+      navigator.permissions.query({ name: 'microphone' }).then(function (p) {
+        if (p && p.state === 'denied') showMicHelp();
+      }).catch(function () {});
+    }
+  } catch (e) {}
+}
 function initSpeechRecognition() {
   const SR = window.SpeechRecognition || window.webkitSpeechRecognition;
   if (!SR) { speechSupported = false; showTextFallback(); return false; }
@@ -480,7 +530,10 @@ function initSpeechRecognition() {
     }
     if (err === 'not-allowed' || err === 'audio-capture') {
       recogWanted = false; isRecording = false; updateRecordBtn();
-      setStatus('麦克风权限被拒绝或找不到麦克风', true, false);
+      const el3 = transcriptEl();
+      if (el3) el3.textContent = '⚠ 麦克风不可用。先点下方「🔓 开启麦克风权限」，按浏览器提示点「允许」；仍不行请换 Chrome / Safari 打开，或直接用输入法语音输入。';
+      setStatus('麦克风不可用：可点下方按钮重新授权', true, false);
+      showMicHelp();
       return;
     }
     setStatus('语音识别出错（' + err + '），可改用文字输入', true, false);
@@ -1228,7 +1281,7 @@ function askCurrentQuestion(){if(currentQuestionIndex>=QUESTION_SEQUENCE.length)
 
 function addChatMsg(role,text){const div=document.createElement('div');div.className='chat-msg '+role;div.textContent=text;document.getElementById('chatHistory').appendChild(div);document.getElementById('chatHistory').scrollTop=99999;}
 
-loadSettings();initSpeechRecognition();
+loadSettings();initSpeechRecognition();checkMicState();
 </script>
 </body>
 </html>
