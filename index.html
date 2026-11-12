@@ -493,6 +493,144 @@ function checkMicState(){
     }
   } catch (e) {}
 }
+// ============ 云端语音识别（不依赖 Google） ============
+let cloudMode = false;   // 服务端是否配置了 ASR_KEY
+let cloudRec = null;     // 进行中的云端录音状态
+
+async function detectAsr(){
+  try {
+    const r = await fetch('/api/transcribe', { cache: 'no-store' });
+    const d = await r.json();
+    cloudMode = !!(d && d.configured);
+  } catch (e) { cloudMode = false; }
+  if (cloudMode) {
+    const b = document.getElementById('recordBtn');
+    if (b) b.title = '按住说话（云端中文识别）';
+    setStatus('已启用云端中文语音识别，按住「说话」', false, true);
+  }
+  return cloudMode;
+}
+
+function mergeFloat32(chunks){
+  let total = 0;
+  for (let i = 0; i < chunks.length; i++) total += chunks[i].length;
+  const out = new Float32Array(total);
+  let off = 0;
+  for (let i = 0; i < chunks.length; i++) { out.set(chunks[i], off); off += chunks[i].length; }
+  return out;
+}
+
+function downsampleTo(samples, fromRate, toRate){
+  if (toRate >= fromRate || !samples.length) return samples;
+  const ratio = fromRate / toRate;
+  const len = Math.floor(samples.length / ratio);
+  const out = new Float32Array(len);
+  for (let i = 0; i < len; i++) {
+    const pos = i * ratio;
+    const i0 = Math.floor(pos);
+    const i1 = Math.min(i0 + 1, samples.length - 1);
+    const f = pos - i0;
+    out[i] = samples[i0] * (1 - f) + samples[i1] * f;
+  }
+  return out;
+}
+
+function encodeWav16k(samples, inRate){
+  const s16 = downsampleTo(samples, inRate || 16000, 16000);
+  const buf = new ArrayBuffer(44 + s16.length * 2);
+  const v = new DataView(buf);
+  function str(o, s){ for (let i = 0; i < s.length; i++) v.setUint8(o + i, s.charCodeAt(i)); }
+  str(0, 'RIFF'); v.setUint32(4, 36 + s16.length * 2, true); str(8, 'WAVE');
+  str(12, 'fmt '); v.setUint32(16, 16, true); v.setUint16(20, 1, true); v.setUint16(22, 1, true);
+  v.setUint32(24, 16000, true); v.setUint32(28, 32000, true); v.setUint16(32, 2, true); v.setUint16(34, 16, true);
+  str(36, 'data'); v.setUint32(40, s16.length * 2, true);
+  let o = 44;
+  for (let i = 0; i < s16.length; i++) {
+    let s = Math.max(-1, Math.min(1, s16[i]));
+    v.setInt16(o, s < 0 ? s * 0x8000 : s * 0x7FFF, true);
+    o += 2;
+  }
+  return new Blob([buf], { type: 'audio/wav' });
+}
+
+async function startCloudRecord(){
+  if (isRecording) return;
+  if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) {
+    setStatus('这个浏览器不支持网页录音，请用输入法语音输入', true, false);
+    return;
+  }
+  isRecording = true; updateRecordBtn();
+  const el = transcriptEl();
+  if (el) el.textContent = '🎤 录音中...（云端识别）';
+  setStatus('录音中...', false, false);
+  let stream = null;
+  try {
+    stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+    if (!isRecording) { stream.getTracks().forEach(function (t) { t.stop(); }); return; }
+    const AC = window.AudioContext || window.webkitAudioContext;
+    if (!AC) throw new Error('浏览器不支持音频处理');
+    const ctx = new AC();
+    const src = ctx.createMediaStreamSource(stream);
+    const proc = ctx.createScriptProcessor(2048, 1, 1);
+    const gain = ctx.createGain();
+    gain.gain.value = 0;
+    const chunks = [];
+    proc.onaudioprocess = function (e) {
+      chunks.push(new Float32Array(e.inputBuffer.getChannelData(0)));
+    };
+    src.connect(proc); proc.connect(gain); gain.connect(ctx.destination);
+    cloudRec = { ctx: ctx, stream: stream, src: src, proc: proc, gain: gain, chunks: chunks, rate: ctx.sampleRate };
+  } catch (e) {
+    isRecording = false; updateRecordBtn(); cloudRec = null;
+    if (stream) { try { stream.getTracks().forEach(function (t) { t.stop(); }); } catch (x) {} }
+    const n = (e && e.name) || '';
+    if (n === 'NotAllowedError' || n === 'SecurityError') {
+      setStatus('麦克风被拒绝：点下方「🔓 开启麦克风权限」允许后重试', true, false);
+      showMicHelp();
+    } else {
+      setStatus('录音启动失败：' + ((e && e.message) || n), true, false);
+    }
+  }
+}
+
+function stopCloudRecord(){
+  if (!cloudRec) return;
+  isRecording = false; updateRecordBtn();
+  const r = cloudRec;
+  cloudRec = null;
+  try { r.proc.disconnect(); r.src.disconnect(); r.gain.disconnect(); } catch (e) {}
+  try { r.stream.getTracks().forEach(function (t) { t.stop(); }); } catch (e) {}
+  const rate = r.rate;
+  try { r.ctx.close(); } catch (e) {}
+  const merged = mergeFloat32(r.chunks);
+  if (merged.length < rate * 0.3) {
+    setStatus('录音太短了，请按住多说几句', true, false);
+    const el = transcriptEl(); if (el) el.textContent = '⚠ 录音太短';
+    return;
+  }
+  uploadAudio(encodeWav16k(merged, rate));
+}
+
+async function uploadAudio(blob){
+  const el = transcriptEl();
+  if (el) el.textContent = '☁️ 正在识别...';
+  setStatus('云端识别中...', false, false);
+  try {
+    const t0 = Date.now();
+    const resp = await fetch('/api/transcribe', { method: 'POST', headers: { 'Content-Type': 'audio/wav' }, body: blob });
+    const txt = await resp.text();
+    let d; try { d = JSON.parse(txt); } catch (e) { throw new Error('识别接口异常（HTTP ' + resp.status + '）'); }
+    if (!resp.ok || (d && d.error)) throw new Error((d && d.error && (d.error.message || d.error)) || ('HTTP ' + resp.status));
+    const text = String((d && d.text) || '').trim();
+    const ta = draftEl();
+    if (ta) ta.value = text;
+    if (el) el.textContent = text ? text + '（可修改后提交）' : '⚠ 没识别到内容，请重试';
+    setStatus(text ? '识别完成（' + ((Date.now() - t0) / 1000).toFixed(1) + 's），确认后点提交' : '未识别到内容', !text, !!text);
+  } catch (e) {
+    setStatus('识别失败：' + e.message, true, false);
+    if (el) el.textContent = '⚠ 识别失败：' + e.message;
+  }
+}
 function initSpeechRecognition() {
   const SR = window.SpeechRecognition || window.webkitSpeechRecognition;
   if (!SR) { speechSupported = false; showTextFallback(); return false; }
@@ -553,7 +691,7 @@ function initSpeechRecognition() {
   return true;
 }
 
-function startRecord() {
+function startRecord() { if (cloudMode) { startCloudRecord(); return; }
   if (isWaitingForAI) return;
   if (!speechSupported && !initSpeechRecognition()) {
     showTextFallback();
@@ -579,7 +717,7 @@ function startRecord() {
   }
 }
 
-function stopRecord() {
+function stopRecord() { if (cloudRec) { stopCloudRecord(); return; }
   if (!isRecording) return;
   isRecording = false; recogWanted = false; updateRecordBtn();
   clearTimeout(recogRestartTimer);
@@ -1281,7 +1419,7 @@ function askCurrentQuestion(){if(currentQuestionIndex>=QUESTION_SEQUENCE.length)
 
 function addChatMsg(role,text){const div=document.createElement('div');div.className='chat-msg '+role;div.textContent=text;document.getElementById('chatHistory').appendChild(div);document.getElementById('chatHistory').scrollTop=99999;}
 
-loadSettings();initSpeechRecognition();checkMicState();
+loadSettings();initSpeechRecognition();checkMicState();detectAsr();
 </script>
 </body>
 </html>
